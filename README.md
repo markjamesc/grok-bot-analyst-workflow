@@ -10,7 +10,7 @@ A later push to `main` still needs a separate, single owner approval.
 - It incorporates the ten approved post-benchmark changes listed below.
 - It is **method only**. It contains no case data, private answer keys, evidence packets, live-file hashes, account names, emails, tokens, or private local paths.
 - It does **not** claim that the team is more accurate than a single model, or that same-family bots are independent in the way different model families can be.
-- Gate **code** is not implemented here. See [gates/README.md](gates/README.md).
+- Gate **code** is partly implemented here: most Python gates are implemented and tested, but G0, G5 and G6 are **NOT IMPLEMENTED**, so these Python gates cannot issue an official Finish lock or certificate. See [gates/README.md](gates/README.md).
 
 ## Honest limit
 
@@ -42,17 +42,17 @@ Details: [docs/stages.md](docs/stages.md) and [docs/explainer.md](docs/explainer
 
 ## Approved post-benchmark changes built into this design
 
-These are design requirements for this draft. They are not yet implemented as executable code.
+These are design requirements for this draft. Items 1, 8 and 9 now have Python gate code; the rest are process rules in the documents.
 
-1. **Python gates with parity tests** against the current R gates. Skeleton only; not implemented.
+1. **Python gates with parity tests** against the current R gates. Partly implemented: see [Status](#status).
 2. **Analysis stays in R.** SQL is SELECT-only (feasibility, Stage 3 source gates, and an independent Stage 4 computation on the frozen hashed snapshot). The parent runs the SQL source gates at Stage 3 and reconciles SQL against R at Stage 4. The Risk Reviewer reviews the source gates and, after reconciliation, the evidence.
 3. **Data-feasibility gate** between Stage 2 and Stage 3: `yes` / `partly` / `no`, with a reason. Stages 1 and 2 stay blind to the data. Data must never shape or add questions. A `partly` or `no` goes to the owner.
 4. **Fewer, clearer rules**, backed by the evidence rules below.
 5. **Greater autonomy.** Escalate only materially consequential analytical or business changes, and genuinely required approvals.
 6. **Persistent lessons** from benchmark runs: process lessons only, never keys or case answers. See [docs/lessons.md](docs/lessons.md).
 7. **Feasibility gate sees structure and quality only**, not values or the answer key.
-8. **Large outputs in parts**, with an assembly script, a transform log, and a regression test for omitted output. The test is not yet written.
-9. **Early key and counting checks**, with a repair cap of **3** on the same defect. After that, escalate to the owner with the open problems, a recommendation, and a batched revision.
+8. **Large outputs in parts**, with an assembly script, a transform log, and a regression test for omitted output (gate GP, implemented and tested).
+9. **Early key and counting checks** (gate G3K, implemented and tested), with a repair cap of **3** on the same defect (implemented and tested). After that, escalate to the owner with the open problems, a recommendation, and a batched revision.
 10. **Explainer document** for the five stages: [docs/explainer.md](docs/explainer.md).
 
 ## Standing rules
@@ -86,8 +86,14 @@ The owner holds the copyright to this design. No license is granted, and no LICE
 | [docs/public-scope.md](docs/public-scope.md) | What must never go in this public repository |
 | [docs/rules.md](docs/rules.md) | Standing operating rules |
 | [CHANGELOG.md](CHANGELOG.md) | Design revisions |
-| [gates/](gates/) | Intended Python gate skeleton (**NOT IMPLEMENTED**) |
+| [gates/](gates/) | Python gates and R parity tests (G0, G5, G6 **NOT IMPLEMENTED**) |
 
 ## Status
 
-This is design documentation plus an honest, unimplemented gate skeleton. Python gates, parity tests, assembly scripts, and the assembly regression test are **NOT IMPLEMENTED**. No tests have been run. No workflow has been started from this draft.
+This is design documentation plus a partial Python gate implementation.
+
+- **Implemented and tested:** G1, G2, G2F, G3S (SQLite engine only), G3K, G3, G4a, G4b, G4c, G4d and GP (assembly regression), plus the repair cap (3, then escalate). G1, G2, G3 and G4d include ported R stage checks, and G4d includes the whole ported R Workflow Gate; those ports pass R-vs-Python parity on the R repo's own test suites. Tests use synthetic data only.
+- **NOT IMPLEMENTED:** G0 (packet integrity), G5 (claims) and G6 (certificate). An official Finish lock or final certificate is therefore **not available** from these Python gates.
+- No workflow has been started from this draft.
+
+Details and test commands: [gates/README.md](gates/README.md) and [docs/gates.md](docs/gates.md).

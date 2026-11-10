@@ -21,7 +21,7 @@ Every gate returns PASS, FAIL (analysis defect), or TOOL_ERROR. An unrun gate is
 
 G3S and G3K are Stage 3 gates and must PASS before G3 locks the design. G3K remains parent-owned Python. ID mapping from earlier drafts: former G4a (SQL source gates) is now G3S; former G4b (fixtures) is now G4a; former G4c (reconciliation) is now G4b; G4c is the new post-reconciliation review; G4d remains the release gate.
 
-**Python gates stay with the parent.** Each needs a parity test against the existing R gate before use. Status: **NOT IMPLEMENTED**. See [../gates/README.md](../gates/README.md).
+**Python gates stay with the parent.** Each needs a parity test against the existing R gate before use. Status (draft, 2026-11-09): G1, G2, G2F, G3S (sqlite engine), G3K, G3, G4a, G4b, G4c, G4d and GP are **implemented and tested**, and the repair cap is too. G1, G2, G3 and G4d include the ported R stage checks, and G4d includes the whole ported R Workflow Gate. Those ports pass R-vs-Python parity on the R repo's own test suites. G0, G5 and G6 are **NOT IMPLEMENTED**. See [../gates/README.md](../gates/README.md).
 
 **Review coverage.** A review counts only if the reviewer received every current subject whole, at the same path, with the current hash.
 

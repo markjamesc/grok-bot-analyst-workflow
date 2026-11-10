@@ -2,6 +2,12 @@
 
 All notable changes to this design draft are recorded here. Dates are America/Chicago.
 
+## 0.1.4 — 2026-11-10
+
+- Added the Python gates and R-vs-Python parity tests. Implemented and tested: G1, G2, G2F, G3S (SQLite engine only), G3K, G3, G4a, G4b, G4c, G4d and GP (assembly regression), plus the repair cap (3, then escalate). G1, G2, G3 and G4d include ported R stage checks, and G4d includes the whole ported R Workflow Gate; those ports pass parity on the R repo's own test suites.
+- Still **NOT IMPLEMENTED:** G0 (packet integrity), G5 (claims) and G6 (certificate). An official Finish lock or final certificate is not available from these Python gates.
+- Removed the gate skeleton stub (`gates/gate_stub.py`). The test suite now requires `GATES_R_REPO` and an `Rscript` on `PATH`, and fails clearly if either is missing. Added a `.gitignore` for Python cache files.
+
 ## 0.1.3 — 2026-11-09
 
 - Expanded the Risk Reviewer to Stages 2, 3, 4, and 5: Stage 2 framing check (alongside the Second Designer) and G2F review; Stage 3 design red-team and SQL source-gate review; Stage 4 post-reconciliation evidence review (new G4c); Stage 5 audit of every number, with arithmetic recomputation from sealed results allowed and no access to the answer key. Findings are classed must fix (required revision) or advisory. Output paths are named in each packet.
