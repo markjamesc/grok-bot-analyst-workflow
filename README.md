@@ -10,7 +10,7 @@ A later push to `main` still needs a separate, single owner approval.
 - It incorporates the ten approved post-benchmark changes listed below.
 - It is **method only**. It contains no case data, private answer keys, evidence packets, live-file hashes, account names, emails, tokens, or private local paths.
 - It does **not** claim that the team is more accurate than a single model, or that same-family bots are independent in the way different model families can be.
-- Gate **code** is partly implemented here: most Python gates are implemented and tested, but G0, G5 and G6 are **NOT IMPLEMENTED**, so these Python gates cannot issue an official Finish lock or certificate. See [gates/README.md](gates/README.md).
+- Gate **code** is implemented here: every Python gate G0–G6 and GP is implemented and tested, including G5 (claims) and G6 (certificate), so a run can now reach a Python-gate certificate. It still needs the R Procedure Gate certificate and an owner approval of the exact finish package. See [gates/README.md](gates/README.md).
 
 ## Honest limit
 
@@ -42,9 +42,9 @@ Details: [docs/stages.md](docs/stages.md) and [docs/explainer.md](docs/explainer
 
 ## Approved post-benchmark changes built into this design
 
-These are design requirements for this draft. Items 1, 8 and 9 now have Python gate code; the rest are process rules in the documents.
+These are design requirements for this draft. Items 1, 8 and 9 have Python gate code; the rest are process rules in the documents.
 
-1. **Python gates with parity tests** against the current R gates. Partly implemented: see [Status](#status).
+1. **Python gates with parity tests** against the current R gates. Implemented: see [Status](#status).
 2. **Analysis stays in R.** SQL is SELECT-only (feasibility, Stage 3 source gates, and an independent Stage 4 computation on the frozen hashed snapshot). The parent runs the SQL source gates at Stage 3 and reconciles SQL against R at Stage 4. The Risk Reviewer reviews the source gates and, after reconciliation, the evidence.
 3. **Data-feasibility gate** between Stage 2 and Stage 3: `yes` / `partly` / `no`, with a reason. Stages 1 and 2 stay blind to the data. Data must never shape or add questions. A `partly` or `no` goes to the owner.
 4. **Fewer, clearer rules**, backed by the evidence rules below.
@@ -86,14 +86,14 @@ The owner holds the copyright to this design. No license is granted, and no LICE
 | [docs/public-scope.md](docs/public-scope.md) | What must never go in this public repository |
 | [docs/rules.md](docs/rules.md) | Standing operating rules |
 | [CHANGELOG.md](CHANGELOG.md) | Design revisions |
-| [gates/](gates/) | Python gates and R parity tests (G0, G5, G6 **NOT IMPLEMENTED**) |
+| [gates/](gates/) | Python gates G0–G6 and GP, with unit, planted-defect and R parity tests |
 
 ## Status
 
-This is design documentation plus a partial Python gate implementation.
+This is design documentation plus the Python gate implementation.
 
-- **Implemented and tested:** G1, G2, G2F, G3S (SQLite engine only), G3K, G3, G4a, G4b, G4c, G4d and GP (assembly regression), plus the repair cap (3, then escalate). G1, G2, G3 and G4d include ported R stage checks, and G4d includes the whole ported R Workflow Gate; those ports pass R-vs-Python parity on the R repo's own test suites. Tests use synthetic data only.
-- **NOT IMPLEMENTED:** G0 (packet integrity), G5 (claims) and G6 (certificate). An official Finish lock or final certificate is therefore **not available** from these Python gates.
-- No workflow has been started from this draft.
+- **Implemented and tested:** G0 (packet integrity), G1, G2, G2F, G3S (SQLite engine only), G3K, G3, G4a, G4b, G4c, G4d, G5 (claims), G6 (certificate) and GP (assembly regression), plus the repair cap (3, then escalate). G1, G2, G3, G4d and G5 include ported R stage checks, and G4d includes the whole ported R Workflow Gate; those ports pass R-vs-Python parity on the R repo's own test suites and on the gate fixtures. G6 requires the R Procedure Gate `finalize` certificate and re-checks every hash it recorded. G0 has no R counterpart. Tests use synthetic data only.
+- G3S runs on SQLite only; other engines need an executor (otherwise TOOL_ERROR).
+- No workflow has been started from these gates yet.
 
 Details and test commands: [gates/README.md](gates/README.md) and [docs/gates.md](docs/gates.md).

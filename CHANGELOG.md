@@ -2,10 +2,19 @@
 
 All notable changes to this design draft are recorded here. Dates are America/Chicago.
 
+## 0.2.0 — 2026-11-10
+
+- Implemented and tested **G0 packet integrity** (`gates/packet.py`): every packet in `artifacts/packets/index.json` must keep its sealed hash once sent, carry every handoff field, list whole current inputs (hash and byte count, every part of a split input), take nothing from a forbidden or answer-key path, name the answer key under NOT ALLOWED TO SEE, contain no `TEMPLATE` text or unfilled placeholders, and require `ANSWERED <PACKET_ID>`. An answered packet needs a sealed reply whose last line is `ANSWERED <PACKET_ID>` and whose produced-files list is not blank and covers every expected output. A file on disk is not a completed send.
+- Implemented and tested **G5 claims**: the R `complete finish` checks (including the R claim ledger), plus a claims ledger in which every claim is quoted verbatim from a deliverable, sits within the locked claim ceiling, is tied to evidence sealed by a current PASS gate, and has every number traced to that evidence or a declared derivation; Second Designer and Risk Reviewer reviews must cover the current ledger and deliverables.
+- Implemented and tested **G6 certificate**: G0–G5 all PASS and current, in dependency order; every packet answered; owner approval of the exact finish package; and the R Procedure Gate `finalize` certificate, with every hash it recorded still current. The G6 record is the Grok certificate.
+- G4d no longer overwrites a Workflow Gate report that the R Procedure Gate already recorded. It recomputes every check and requires that report unchanged.
+- New R-certified test fixture built with the R Procedure Gate CLI; R parity of the stage checks inside G1/G2/G3/G4d/G5 and of the `finalize` verdict.
+- Process corrections from the Case B head-to-head run: re-review the current file after a repair before its gate; children must reply to the parent and end with a produced-files list and `ANSWERED <PACKET_ID>`; never send a template; Stage 5 order G5 → owner finish approval → R `finalize` → G6; the first framing states the capacity/loss rule and the decision unit. New lessons L5–L9.
+
 ## 0.1.4 — 2026-11-10
 
 - Added the Python gates and R-vs-Python parity tests. Implemented and tested: G1, G2, G2F, G3S (SQLite engine only), G3K, G3, G4a, G4b, G4c, G4d and GP (assembly regression), plus the repair cap (3, then escalate). G1, G2, G3 and G4d include ported R stage checks, and G4d includes the whole ported R Workflow Gate; those ports pass parity on the R repo's own test suites.
-- Still **NOT IMPLEMENTED:** G0 (packet integrity), G5 (claims) and G6 (certificate). An official Finish lock or final certificate is not available from these Python gates.
+- G0 (packet integrity), G5 (claims) and G6 (certificate) were not yet implemented at 0.1.4; they were added in 0.2.0.
 - Removed the gate skeleton stub (`gates/gate_stub.py`). The test suite now requires `GATES_R_REPO` and an `Rscript` on `PATH`, and fails clearly if either is missing. Added a `.gitignore` for Python cache files.
 
 ## 0.1.3 — 2026-11-09

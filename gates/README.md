@@ -3,13 +3,13 @@
 Analysis stays in R. Only the gates and checks are Python (standard library only; no pandas or pyyaml needed).
 Every gate returns **PASS**, **FAIL** or **TOOL_ERROR**. An unrun gate is not PASS, and a gate with missing input never PASSes.
 
-**Draft status (2026-11-09, uncommitted working tree).** Tested means: covered by `gates/tests` (fault injection),
-and, where an R gate exists, by R-vs-Python parity on the R repo's own test suites. Gates without tests are
-**NOT IMPLEMENTED**.
+**Status (2026-11-10).** Every gate below is implemented and tested. Tested means: covered by `gates/tests` (good path
+plus planted-defect fault injection) and, where an R gate exists, by R-vs-Python parity on the R repo's own test suites
+and on the gate fixtures.
 
 | ID | Status | Module | R checks inside (parity-tested port) | Tests |
 |---|---|---|---|---|
-| G0 Packet integrity | **NOT IMPLEMENTED** | — | — | — |
+| G0 Packet integrity | Implemented, tested | `packet.g0` | none (no R counterpart: the R gate has no packet format) | good path + 17 faults |
 | G1 Decision | Implemented, tested | `stage_gates.g1` | R `complete start` checks (validate_stage_receipt + operations ledger + closure) | good path + 5 faults |
 | G2 Question lock | Implemented, tested | `stage_gates.g2` | R `complete framing` checks | good path + 6 faults |
 | G2F Feasibility | Implemented, tested | `stage_gates.g2f` | none (no R equivalent) | good path + 6 faults |
@@ -19,9 +19,9 @@ and, where an R gate exists, by R-vs-Python parity on the R repo's own test suit
 | G4a Fixtures | Implemented, tested | `stage_gates.g4a`, `reconcile` | ported R m_compare run on every pair | good path + 3 faults |
 | G4b Reconciliation | Implemented, tested | `stage_gates.g4b`, `reconcile` | ported R m_compare run on every pair | good path + 8 tests |
 | G4c Post-reconciliation review | Implemented, tested | `stage_gates.g4c` | none (no R equivalent) | good path + 3 faults |
-| G4d Release | Implemented, tested | `stage_gates.g4d` | R `complete execution` checks + the whole ported R Workflow Gate | good path + 5 faults |
-| G5 Claims | **NOT IMPLEMENTED** | — | — | — |
-| G6 Certificate | **NOT IMPLEMENTED** as a Grok gate (the R `finalize` port exists in `procedure.py`) | — | — | — |
+| G4d Release | Implemented, tested | `stage_gates.g4d` | R `complete execution` checks + the whole ported R Workflow Gate | good path + 6 faults + R-report kept |
+| G5 Claims | Implemented, tested | `stage_gates.g5` | R `complete finish` checks (validate_stage_receipt incl. m_finish claim ledger and m_ai, operations ledger, closure) | good path + 12 faults; R stage-check parity |
+| G6 Certificate | Implemented, tested | `stage_gates.g6` | requires the R `finalize` certificate (ported in `procedure.py`) and re-checks every hash it recorded | good path + 10 faults; R vs Python `finalize` verdict parity |
 | GP Assembly regression | Implemented, tested | `gp_assembly`, `assembly` | none | 16 assembly + 6 GP tests |
 | Repair cap (3, then ESCALATE) | Implemented, tested | `repair` | — | in G3K/G4d tests |
 | R Workflow Gate port | Implemented, parity-tested | `workflow_gate.py` (+ `methodology.py`, `rsem.py`) | all | 27 whole-gate + 1,200+ function-level parity comparisons |
@@ -53,13 +53,29 @@ input still has the recorded hash** ("PASS by hash").
 | G3 | R `artifacts/stage3_locked_design.json`; `artifacts/stage3_grok_design.json` {fixtures, reconciliation, early_checks, review_subjects}; reviews `artifacts/stage3/reviews/{second_designer_compare, risk_reviewer_red_team, risk_reviewer_source_gates}.json`; `artifacts/stage3_owner_approval.json` {design_sha256, grok_design_sha256, approval_text, approval_timestamp}; current G3S and G3K records |
 | G4a/G4b | `artifacts/stage4/outputs.json` {outputs {ra, rb, sql: {name: {path, sha256}}}, fixtures {ra, rb, sql: {fixture_id: {path, sha256}}}} |
 | G4c | `artifacts/stage4/reviews/risk_reviewer_g4c.json` covering the current G4b record and every reconciled output |
-| G4d | every lower gate record; `artifacts/repairs.json`; R `artifacts/stage4_validation_status.json` and Stage 4 evidence (the ported Workflow Gate) |
+| G4d | every lower gate record; `artifacts/repairs.json`; R `artifacts/stage4_validation_status.json` and Stage 4 evidence (the ported Workflow Gate). If R `artifacts/procedure/run_state.json` records a Workflow Gate report, G4d does not overwrite it and requires it unchanged |
+| G0 | `artifacts/packets/index.json` {packets[{id, path, status draft/sent/answered, sha256 (once sent), reply {path, sha256} (once answered)}], forbidden_strings?, forbidden_path_prefixes? (`private/` always applies)}; each packet in the [handoff format](../docs/handoff.md); each reply ends with `PRODUCED FILES:` + `- <path>` lines, then `ANSWERED <PACKET_ID>` |
+| G5 | R `artifacts/stage5_interpretation_status.json`; `artifacts/stage5_claims.json` {deliverables[{path, sha256}], claims[{id, type, deliverable, quote, evidence[{path, sha256}], derived?[{value, basis}]}]}; reviews `artifacts/stage5/reviews/{second_designer_inference, risk_reviewer_numbers}.json`; current G4d record |
+| G6 | every gate record G0–G5; `artifacts/stage5_owner_approval.json` {claims_sha256, deliverables[{path, sha256}], approval_text, approval_timestamp}; R `artifacts/final_certificate.json` and `artifacts/procedure/run_state.json`; writes `artifacts/gates/G6.json` (the Grok certificate) |
 | GP | `artifacts/assembly/index.json` {assemblies[{split}]}; split specs, replies, part files, outputs and transform logs |
 
 A review record is {role, subjects[{path, sha256}], findings[{id, class must_fix|advisory, status open|closed}]}. It counts
 only if every current subject is listed at the same path with the current hash; an open must-fix blocks the gate.
 
 ## Rules each gate enforces
+
+- **G0:** run before every send and after every capture. A sent packet is sealed (hash must not change). Inputs are
+  `- <path> sha256=<hash> bytes=<n> [part k of K]` and must be whole and current. No input under `private/` or a
+  declared forbidden prefix, and no answer-key file. No `TEMPLATE`, `{{placeholder}}` or handoff-format `<...>`
+  placeholder. A `-vN` correction (N >= 2) names what it SUPERSEDES. An answered packet has a sealed reply ending
+  `ANSWERED <PACKET_ID>` with a non-blank produced-files list covering every EXPECTED OUTPUT; a file on disk alone
+  leaves the packet unanswered, and G6 refuses unanswered packets.
+- **G5:** sealed evidence means an input of a current PASS gate record G1–G4d, or that record itself. Every number in a
+  claim quote must appear in that claim's evidence or be declared under `derived` with its basis (for the Risk
+  Reviewer's recomputation). Claim types must sit within the locked design's `allowed_claim_types`.
+- **G6:** each gate ran after the gates it depends on (record timestamps); every lower record is PASS by hash; the
+  owner approved the exact claims ledger and deliverable hashes; the R certificate is PASS and certified, and its
+  completed-stage artifacts, deliverables, evidence inventory and Workflow Gate report hashes are still current.
 
 - **G4b:** exact full-field match between R-A, R-B and SQL (all three pairs). Every column, compared as the text R's
   `read.csv(colClasses = "character")` reads (no trimming), keyed by the design keys; row order is ignored. A numeric
@@ -81,12 +97,22 @@ sends, methodology, targeted gates, acceptance, livefix, remediation, successor)
 `workflow_gate.R` / `procedure_gate.R` invocation and every outermost methodology contract call also run by the Python
 port on the same state. Last full run: 9 suites, R all green, 1,254 comparisons, 0 mismatches.
 
+Stage-check parity (`gates/tests/test_finish_gates.py`): the R checks inside G1, G2, G3, G4d and G5 are compared
+one-for-one (name and verdict) with the R repo's own `validate_stage_receipt`, `m_operations` and `step_closure`
+(`parity_tests/r_stage_checks.R`), on an R-certified project and on planted defects; and the Python `finalize` port and
+R `finalize` give the same verdict and failing checks on the same state.
+
 Known gaps: the `successor` command is not exercised through the CLI by the R suites (no parity evidence for it);
 the certificate's `certificate_sha256` is SHA-256 of canonical JSON, not R's `digest()` of the R object; inventory
 order uses byte order (R uses the locale; identical in the C/UTF-8 locale the suites ran in); wording of R/Python
 error messages differs (verdicts and check lists are identical).
 
 ## Production note
+
+Run order at the end of a run: R `complete execution` → G4d → G5 → owner approval of the exact finish package →
+R `complete finish` and `finalize` → G0 (final) → G6. G4d never overwrites a report the R Procedure Gate recorded.
+PASS by hash is one level deep: a gate record stays current while its own recorded inputs are unchanged, so G6
+re-checks every lower record directly.
 
 The R-equivalent checks inside G1, G2, G3 and G4d require the R receipts and operations ledgers with their existing
 field names (for example `ai2_independent_reconstruction`, `ai3_independent_red_team`) and the R Stage 4 evidence layout.

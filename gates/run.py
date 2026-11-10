@@ -1,7 +1,7 @@
 """Gate runner: python3 -m gates.run <GATE_ID> <project_root> [--no-record]
 
 Returns PASS, FAIL or TOOL_ERROR (exit 0, 1, 2) and records artifacts/gates/<ID>.json unless --no-record.
-Implemented gates are listed in IMPLEMENTED; anything else is NOT IMPLEMENTED and exits 2 (never PASS).
+Implemented gates (G0-G6, GP) are listed in IMPLEMENTED; an unknown gate id is TOOL_ERROR and exits 2 (never PASS).
 """
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ def run_gate(gate_id, project_root, record=True, **kw):
     """Returns the gate record dict; record["result"] is PASS, FAIL or TOOL_ERROR."""
     if gate_id not in IMPLEMENTED:
         return {"gate": gate_id, "result": TOOL_ERROR, "checks": [], "inputs": [], "checked_at_utc": now_utc(),
-                "error": f"{gate_id}: NOT IMPLEMENTED"}
+                "error": f"{gate_id}: unknown gate"}
     try:
         rec = IMPLEMENTED[gate_id](project_root, **kw)
     except ToolError as e:
