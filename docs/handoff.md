@@ -20,3 +20,7 @@ REPLY ENDS WITH: ANSWERED <PACKET_ID> + list of produced files
 - Record send time, the packet hash, and the captured reply hash in the run ledger.
 - Check the reply against EXPECTED OUTPUT before sealing it.
 - A correction is a new packet with a `-vN` suffix that names what it supersedes.
+
+## Stage 3 packets for the Second Designer
+- First packet: Stage 3 inputs only. Do not include the Lead Designer's draft or reasoning.
+- After the Second Designer's independent design is sealed, send a second packet with the lead's design so the Second Designer can compare and report differences.

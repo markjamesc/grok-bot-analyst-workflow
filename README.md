@@ -22,7 +22,7 @@ Every bot in this version is a Grok Bot, so they share one model family. Separat
 |---|---|---|
 | Parent | Data Analysis and Coding bot | Orchestrates, packs and seals work, runs gates, reconciles outputs, escalates. Does not author analysis or interpretation. |
 | Lead Designer | Child bot | Drafts Stages 1–3 and the Stage 5 write-up. |
-| Second Designer | Child bot | Independent design critique and Stage 5 inference review. |
+| Second Designer | Child bot | Writes an independent Stage 3 design before seeing the lead's, then compares; also Stage 2 critique and Stage 5 inference review. |
 | Risk Reviewer | Child bot | Risk and numbers audit across design and finish. |
 | Analyst R-A | Child bot | Independent judged analysis in R. |
 | Analyst R-B | Child bot | Second independent judged analysis in R. Does not see R-A before freeze. |

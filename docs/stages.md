@@ -4,16 +4,18 @@ Each step is: parent packs → child works → parent captures and seals → gat
 
 | Stage | Author | Reviewers | Gate | Owner touchpoint |
 |---|---|---|---|---|
-| 1 Start | Lead Designer | Second Designer | G1 decision | None unless the decision is unclear |
+| 1 Start | Lead Designer | — | G1 decision | None unless the decision is unclear |
 | 2 Framing | Lead Designer | Second Designer | G2 question lock | Approve the locked question |
 | 2→3 Feasibility | SQL Analyst | Risk Reviewer | G2F feasibility | Only on `partly` / `no` |
-| 3 Design | Lead Designer | Second Designer (cross-review), Risk Reviewer | G3 design lock, early key/count checks | Approve the exact design hash |
+| 3 Design | Lead Designer | Second Designer (independent design, then compare), Risk Reviewer | G3 design lock, early key/count checks | Approve the exact design hash |
 | 4 Execution | R-A, R-B, SQL Analyst | Risk Reviewer (SQL source gates) | G4a source, G4b fixtures, G4c reconciliation, G4d release | Only after 3 failed repairs or a changed decision |
 | 5 Finish | Lead Designer | Second Designer (inference), Risk Reviewer (numbers) | G5 claims, G6 certificate | Human approval of the finish |
 | Score | Scorer outside live roles (earlier ChatGPT key preparer) | — | — | — |
 
 ## Notes
 - Stages 1–2 never see data values. Feasibility sees structure and quality only, not values or the answer key, and cannot add or reshape questions.
+- Stage 1 has no Second Designer role. The Lead Designer authors the decision; the parent runs G1.
+- At Stage 3, the Second Designer first writes its own independent design from the Stage 3 inputs, without seeing the Lead Designer's draft or reasoning. After that design is sealed, the parent sends the lead's design so the Second Designer can compare and report differences.
 - Stage 5 reuses the existing bots: the Lead Designer writes the interpretation, the Second Designer checks the inference, and the Risk Reviewer audits the numbers. There are no dedicated finish bots.
 - Stage 4 order: SQL source gates pass → R-A, R-B, and SQL build independently → freeze each → fixtures → parent reconciles R-A vs R-B vs SQL → release gate.
 - A difference in reconciliation is traced to a cause and repaired from the design. The design itself does not change without owner change control and a new version.

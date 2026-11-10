@@ -2,6 +2,11 @@
 
 All notable changes to this design draft are recorded here. Dates are America/Chicago.
 
+## 0.1.2 — 2026-11-09
+
+- Clarified the Second Designer's Stage 3 job: it first writes its own independent design from the Stage 3 inputs, without seeing the Lead Designer's draft or reasoning, then compares against the lead's design and reports differences.
+- Removed the Second Designer from Stage 1. Stage 1 has no Second Designer role; the parent runs G1. The Second Designer is active in Stages 2, 3, and 5 only.
+
 ## 0.1.1 — 2026-11-09
 
 - Corrected the approved post-benchmark change list to all ten items. Item 7 (feasibility gate sees structure and quality only, not values or the answer key) is now listed separately from item 3 (the data-feasibility gate itself).
