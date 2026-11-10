@@ -1,14 +1,18 @@
-"""Grok workflow gates G1, G2, G2F, G3S, G3K, G3, G4a, G4b, G4c, G4d (docs/gates.md).
+"""Grok workflow gates G1, G2, G2F, G3S, G3K, G3, G4a, G4b, G4c, G4d, G5, G6 (docs/gates.md). G0 is in gates/packet.py.
 
 Never weaker than the R referee: G1, G2 and G3 include every check the R procedure gate runs when it completes the
 matching stage (validate_stage_receipt + methodology operations ledger + evidence closure, ported in gates/procedure.py
 and gates/methodology.py). G4d includes the complete ported R Workflow Gate (gates/workflow_gate.py) and the R
-Stage 4 completion checks. Input files are listed in gates/README.md.
+Stage 4 completion checks. G5 includes the R `complete finish` checks (incl. the R claim ledger, m_finish). G6 requires
+the R Procedure Gate `finalize` certificate and re-checks that every hash it recorded is still current. Input files are listed in gates/README.md.
 """
 from __future__ import annotations
 
+import datetime
 import json
 import os
+import re
+from decimal import Decimal, InvalidOperation
 
 from gates import methodology as M
 from gates import procedure as P
@@ -19,7 +23,8 @@ from gates.common import (FAIL, PASS, Gate, ToolError, approval_ok, gate_record_
 from gates.rsem import RError
 
 R_STEP = {"G1": ("start", "artifacts/stage1_decision.json"), "G2": ("framing", "artifacts/stage2_framing.json"),
-          "G3": ("design", "artifacts/stage3_locked_design.json"), "G4d": ("execution", "artifacts/stage4_validation_status.json")}
+          "G3": ("design", "artifacts/stage3_locked_design.json"), "G4d": ("execution", "artifacts/stage4_validation_status.json"),
+          "G5": ("finish", "artifacts/stage5_interpretation_status.json")}
 GROK_DESIGN = "artifacts/stage3_grok_design.json"
 FEASIBILITY = "artifacts/stage2f_feasibility.json"
 OUTPUTS = "artifacts/stage4/outputs.json"
@@ -437,6 +442,8 @@ def g4c(root):
 
 # ------------------------------------------------------------------------------------------------ G4d release
 LOWER = ("G1", "G2", "G2F", "G3S", "G3K", "G3", "G4a", "G4b", "G4c")
+RUN_STATE = "artifacts/procedure/run_state.json"
+WG_REPORT = "artifacts/workflow_gate_status.json"
 
 
 def g4d(root):
@@ -448,8 +455,16 @@ def g4d(root):
             g.inputs.append(ref)
     repair.cap_checks(g)
     r_stage_checks(g, "execution")
-    status, report, checks = WG.run(root, write=True)
-    g.use("artifacts/workflow_gate_status.json")
+    # If the R Procedure Gate already recorded its Workflow Gate report (R `complete execution`), never overwrite it:
+    # recompute every check without writing and require the recorded report to be unchanged.
+    st = _plain(RUN_STATE, g)
+    wgr = st.get("workflow_gate") if isinstance(st, dict) else None
+    r_recorded = isinstance(wgr, dict) and text(wgr.get("report_sha256"))
+    status, report, checks = WG.run(root, write=not r_recorded)
+    cur = g.use(WG_REPORT)
+    if r_recorded:
+        g.add("R-recorded Workflow Gate report unchanged", cur["sha256"] == str(wgr.get("report_sha256")).lower(),
+              "artifacts/workflow_gate_status.json must still have the hash the R Procedure Gate recorded")
     if report is None:
         g.add("R Workflow Gate (python port) ran", False, "the R workflow gate halts on this input")
     else:
@@ -458,4 +473,202 @@ def g4d(root):
     return g.result()
 
 
-GATES = {"G1": g1, "G2": g2, "G2F": g2f, "G3S": g3s, "G3K": g3k, "G3": g3, "G4a": g4a, "G4b": g4b, "G4c": g4c, "G4d": g4d}
+
+
+# ------------------------------------------------------------------------------------------------ G5 claims
+CLAIMS = "artifacts/stage5_claims.json"
+CLAIM_TYPES = ("descriptive", "associational", "predictive", "causal", "recommendation")
+NUM_RE = re.compile(r"(?<![\w.])[-+]?\d[\d,]*(?:\.\d+)?%?(?![\w])")
+SEALED_GATES = LOWER + ("G4d",)
+
+
+def _num(tok):
+    t = tok.replace(",", "").rstrip("%").lstrip("+")
+    try:
+        return str(Decimal(t).normalize()) if t not in ("", "-") else None
+    except InvalidOperation:
+        return None
+
+
+def numbers_in(s):
+    return {n for n in (_num(m.group(0)) for m in NUM_RE.finditer(s)) if n is not None}
+
+
+def _read_text(root, rel):
+    full = safe_rel(root, rel)
+    try:
+        with open(full, "rb") as fh:
+            return fh.read().decode("utf-8")
+    except (OSError, TypeError, UnicodeDecodeError):
+        return None
+
+
+def sealed_evidence(root):
+    """{path: sha256} of every input of a current PASS gate record G1..G4d, plus those gate records themselves."""
+    out = {}
+    for gid in SEALED_GATES:
+        ok, _, ref = gate_record_current(root, gid)
+        if not ok:
+            continue
+        out[ref["path"]] = ref["sha256"]
+        from gates.common import load_json_strict
+        rec, _ = load_json_strict(os.path.join(root, ref["path"]))
+        for i in (rec if isinstance(rec, dict) else {}).get("inputs", []):
+            if isinstance(i, dict) and text(i.get("path")) and isinstance(i.get("sha256"), str):
+                out[i["path"]] = i["sha256"].lower()
+    return out
+
+
+def g5(root):
+    g = Gate("G5", root)
+    r5 = r_stage_checks(g, "finish")
+    ok4, det4, _ = gate_record_current(root, "G4d")
+    g.add("G4d PASS and current (release)", ok4, det4)
+    c = g.load(CLAIMS, "Claims ledger") or {}
+    dl = c.get("deliverables")
+    dl = dl if isinstance(dl, list) else []
+    dpaths = [d.get("path") for d in dl if isinstance(d, dict)]
+    g.add("Deliverables declared and current", bool(dl) and all(ref_current(root, d) for d in dl) and len(set(dpaths)) == len(dpaths),
+          "deliverables: [{path, sha256}] current, no duplicates")
+    for pth in dpaths:
+        if text(pth):
+            g.use(pth)
+    r_dl = M.dollar(r5, "deliverables") if M.is_list(r5) else None
+    r_dl = [x for x in (r_dl if isinstance(r_dl, list) else [r_dl] if isinstance(r_dl, str) else []) if isinstance(x, str)]
+    g.add("Deliverables equal the R finish receipt", bool(r_dl) and set(r_dl) == set(dpaths),
+          f"R receipt {sorted(r_dl)}; claims ledger {sorted(p for p in dpaths if text(p))}")
+    s3 = _plain(R_STEP["G3"][1], g) or {}
+    allowed = ((s3.get("methodology") or {}).get("analytical_target") or {}).get("allowed_claim_types") if isinstance(s3.get("methodology"), dict) else None
+    allowed = [a for a in allowed if a in CLAIM_TYPES] if isinstance(allowed, list) and allowed else list(CLAIM_TYPES)
+    claims = c.get("claims")
+    claims = claims if isinstance(claims, list) else []
+    ids = [x.get("id") for x in claims if isinstance(x, dict)]
+    g.add("Claims listed", bool(claims) and len(ids) == len(claims) and all(text(i) for i in ids) and len(set(ids)) == len(ids),
+          "claims: non-empty list with unique ids (every material claim in the deliverables)")
+    sealed = sealed_evidence(root)
+    texts = {pth: _read_text(root, pth) for pth in dpaths if text(pth)}
+    covered = set()
+    for x in claims:
+        x = x if isinstance(x, dict) else {}
+        lab = f"Claim {x.get('id')}"
+        g.add(f"{lab} type within the claim ceiling", x.get("type") in allowed, f"type in {allowed} (locked design)")
+        q, dv = x.get("quote"), x.get("deliverable")
+        in_dl = text(q) and dv in texts and texts[dv] is not None and q in texts[dv]
+        g.add(f"{lab} quoted verbatim from a deliverable", in_dl, "quote must appear verbatim in the named deliverable")
+        if in_dl:
+            covered.add(dv)
+        ev = x.get("evidence")
+        ev = ev if isinstance(ev, list) else []
+        not_sealed = [e.get("path") if isinstance(e, dict) else e for e in ev
+                      if not (isinstance(e, dict) and ref_current(root, e) and sealed.get(e.get("path")) == str(e.get("sha256")).lower())]
+        g.add(f"{lab} tied to sealed evidence", bool(ev) and not not_sealed,
+              "evidence: [{path, sha256}] each an input of a current PASS gate record G1-G4d (or that record)"
+              + (f"; not sealed or not current: {not_sealed}" if not_sealed else ""))
+        for e in ev:
+            if isinstance(e, dict) and text(e.get("path")):
+                g.use(e["path"])
+        ev_nums = set()
+        for e in ev:
+            t = _read_text(root, e.get("path")) if isinstance(e, dict) and text(e.get("path")) else None
+            ev_nums |= numbers_in(t) if t else set()
+        der = x.get("derived", [])
+        der = der if isinstance(der, list) else []
+        der_ok = all(isinstance(d, dict) and _num(str(d.get("value", ""))) is not None and text(d.get("basis")) for d in der)
+        der_vals = {_num(str(d.get("value"))) for d in der if isinstance(d, dict)} if der_ok else set()
+        loose = sorted(numbers_in(q) - ev_nums - der_vals) if text(q) else []
+        g.add(f"{lab} every number traced", der_ok and not loose,
+              "each number in the quote appears in its evidence or is listed under derived [{value, basis}]"
+              + (f"; untraced: {loose}" if loose else "") + ("" if der_ok else "; derived entries malformed"))
+    uncovered = [pth for pth in dpaths if text(pth) and pth not in covered]
+    g.add("Every deliverable carries a recorded claim", bool(dpaths) and not uncovered, f"no claim quoted from: {uncovered}" if uncovered else "ok")
+    subj = [CLAIMS] + [pth for pth in dpaths if text(pth)]
+    review_checks(g, "artifacts/stage5/reviews/second_designer_inference.json", "second_designer", subj, "Second Designer inference")
+    review_checks(g, "artifacts/stage5/reviews/risk_reviewer_numbers.json", "risk_reviewer", subj, "Risk Reviewer numbers")
+    repair.cap_checks(g)
+    return g.result()
+
+
+# ------------------------------------------------------------------------------------------------ G6 certificate
+CHAIN = ("G0",) + LOWER + ("G4d", "G5")
+DEPS = {"G2": ("G1",), "G2F": ("G2",), "G3S": ("G2F",), "G3K": ("G2F",), "G3": ("G3S", "G3K"), "G4a": ("G3",), "G4b": ("G4a",),
+        "G4c": ("G4b",), "G4d": ("G4c",), "G5": ("G4d",)}
+R_CERT = "artifacts/final_certificate.json"
+FINISH_APPROVAL = "artifacts/stage5_owner_approval.json"
+R_STEPS = ("start", "framing", "design", "execution", "finish")
+
+
+def _t(rec):
+    try:
+        return datetime.datetime.strptime(rec.get("checked_at_utc", ""), "%Y-%m-%dT%H:%M:%SZ")
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+
+def g6(root):
+    g = Gate("G6", root)
+    recs, refs = {}, {}
+    for gid in CHAIN:
+        ok, det, ref = gate_record_current(root, gid)
+        g.add(f"{gid} PASS and current", ok, det)
+        if ref:
+            g.inputs.append(ref)
+            refs[gid] = ref
+            recs[gid] = _plain(ref["path"], g) or {}
+    g0 = recs.get("G0", {})
+    un = g0.get("unanswered") if isinstance(g0.get("unanswered"), list) else None
+    g.add("Every packet answered", "G0" in recs and un == [], f"unanswered packets: {un}" if un else "G0 lists none unanswered")
+    late = []
+    for gid, deps in DEPS.items():
+        for d in deps:
+            a, b = _t(recs.get(gid, {})), _t(recs.get(d, {}))
+            if gid in recs and d in recs and (a is None or b is None or a < b):
+                late.append(f"{gid} before {d}")
+    g.add("All stages in order", len(recs) == len(CHAIN) and not late,
+          "each gate ran after the gates it depends on" + (f"; out of order: {late}" if late else ""))
+    repair.cap_checks(g)
+    # owner approval of the exact finish package
+    c = _plain(CLAIMS, g)
+    g.use(CLAIMS)
+    ap = g.load(FINISH_APPROVAL, "Owner finish approval") or {}
+    cdl = {d.get("path"): str(d.get("sha256")).lower() for d in (c or {}).get("deliverables", []) if isinstance(d, dict)}
+    adl = {d.get("path"): str(d.get("sha256")).lower() for d in ap.get("deliverables", []) if isinstance(d, dict)} \
+        if isinstance(ap.get("deliverables"), list) else {}
+    cur_claims = ref_of(root, CLAIMS)["sha256"]
+    g.add("Owner approved the exact finish package", approval_ok(ap) and cur_claims is not None
+          and str(ap.get("claims_sha256", "")).lower() == cur_claims and bool(adl) and adl == cdl
+          and all(ref_current(root, {"path": k, "sha256": v}) for k, v in adl.items()),
+          "stage5_owner_approval.json claims_sha256 and deliverables must equal the current claims ledger and files")
+    # R Procedure Gate certificate, and every hash it recorded still current
+    cert = g.load(R_CERT, "R final certificate") or {}
+    g.add("R certificate PASS", cert.get("result") == PASS and cert.get("certified") is True
+          and cert.get("certificate") == "five_stage_procedure_certificate", "R `finalize` must have certified the run")
+    cs = cert.get("completed_steps") if isinstance(cert.get("completed_steps"), list) else []
+    got = [s.get("id") for s in cs if isinstance(s, dict)]
+    stale = [s.get("id") for s in cs if not (isinstance(s, dict) and ref_current(root, {"path": s.get("artifact_path"), "sha256": s.get("artifact_sha256")}))]
+    g.add("R certificate stages complete and unchanged", got == list(R_STEPS) and not stale,
+          f"completed_steps {got}; changed since certification: {stale}")
+    for s in cs:
+        if isinstance(s, dict) and text(s.get("artifact_path")):
+            g.use(s["artifact_path"])
+    dls = cert.get("deliverables") if isinstance(cert.get("deliverables"), list) else []
+    rdl = {d.get("path"): str(d.get("sha256")).lower() for d in dls if isinstance(d, dict)}
+    g.add("R certificate deliverables unchanged", bool(rdl) and all(ref_current(root, {"path": k, "sha256": v}) for k, v in rdl.items())
+          and rdl == cdl, "certified deliverables still current and equal to the approved finish package")
+    inv = cert.get("evidence_inventory")
+    g.add("R evidence inventory unchanged", ref_current(root, inv), "evidence_inventory {path, sha256} current")
+    if isinstance(inv, dict) and text(inv.get("path")):
+        g.use(inv["path"])
+    g.add("R Workflow Gate report unchanged", ref_of(root, WG_REPORT)["sha256"] == str(cert.get("workflow_gate_report_sha256", "")).lower(),
+          "workflow_gate_status.json still has the hash the certificate recorded")
+    st = _plain(RUN_STATE, g) or {}
+    fc = st.get("final_certificate") if isinstance(st.get("final_certificate"), dict) else {}
+    g.add("R run state certified this certificate", st.get("status") == "CERTIFIED" and fc.get("path") == R_CERT
+          and fc.get("sha256") == ref_of(root, R_CERT)["sha256"], "run_state status CERTIFIED and final_certificate hash current")
+    g.extra["certificate"] = {"certificate": "grok_five_stage_gate_certificate", "gates": refs, "r_certificate": ref_of(root, R_CERT),
+                              "claims": ref_of(root, CLAIMS), "owner_finish_approval": ref_of(root, FINISH_APPROVAL),
+                              "note": "Recorded gate checks and approvals; not a proof of correctness or AI independence."}
+    return g.result()
+
+
+GATES = {"G1": g1, "G2": g2, "G2F": g2f, "G3S": g3s, "G3K": g3k, "G3": g3, "G4a": g4a, "G4b": g4b, "G4c": g4c, "G4d": g4d,
+         "G5": g5, "G6": g6}

@@ -210,3 +210,86 @@ def add_assembly(root):
     wt(root, "transcripts/W2_reply.md", "Part 2:\n```\n" + json.dumps(p2, indent=1) + "\n```\nANSWERED W-2\n")
     wj(root, "artifacts/assembly/index.json", {"assemblies": [{"split": "operator/W_split.json"}]})
     return "operator/W_split.json"
+
+
+# ------------------------------------------------------------------------------------------------ Stage 5, packets, G6
+DELIVERABLES = {"stage5-evidence.md": "Customer c1 spent 15.5 over 2 orders.\n",
+                "stage5-decision.md": "Decision: expand for c1, whose total is above the threshold of 10.\n",
+                "monitoring-plan.md": "Monitor c1 and c2 each month.\n"}
+
+
+def build_r_certified_project(root):
+    """An R-certified project: the R Procedure Gate CLI ran start..finish and finalize (make_r_certified_project.R)."""
+    extras = os.path.join(os.path.dirname(root), os.path.basename(root) + "-extras.json")
+    with open(extras, "w") as fh:
+        json.dump(dict(EXTRAS, deliverables={k: v.rstrip("\n") for k, v in DELIVERABLES.items()}), fh)
+    rs = rscript()
+    env = dict(os.environ, PATH=os.path.dirname(rs) + os.pathsep + os.environ.get("PATH", ""))
+    p = subprocess.run([rs, os.path.join(HERE, "make_r_certified_project.R"), r_repo(), root, extras],
+                       capture_output=True, text=True, env=env)
+    if p.returncode != 0:
+        raise RuntimeError(p.stdout + p.stderr)
+
+
+def claims_ledger(root, claims=None):
+    dl = [ref(root, d) for d in DELIVERABLES]
+    s4 = "outputs/ra/summary.csv"
+    claims = claims if claims is not None else [
+        {"id": "C1", "type": "descriptive", "deliverable": "stage5-evidence.md", "quote": "Customer c1 spent 15.5 over 2 orders.",
+         "evidence": [ref(root, s4)]},
+        {"id": "C2", "type": "descriptive", "deliverable": "stage5-decision.md",
+         "quote": "Decision: expand for c1, whose total is above the threshold of 10.",
+         "evidence": [ref(root, s4), ref(root, "artifacts/stage2_framing.json")]},
+        {"id": "C3", "type": "descriptive", "deliverable": "monitoring-plan.md", "quote": "Monitor c1 and c2 each month.",
+         "evidence": [ref(root, "artifacts/gates/G4b.json")]}]
+    return wj(root, "artifacts/stage5_claims.json", {"deliverables": dl, "claims": claims})
+
+
+def add_stage5(root, claims=None):
+    claims_ledger(root, claims)
+    subj = ["artifacts/stage5_claims.json"] + list(DELIVERABLES)
+    review(root, "artifacts/stage5/reviews/second_designer_inference.json", "second_designer", subj)
+    review(root, "artifacts/stage5/reviews/risk_reviewer_numbers.json", "risk_reviewer", subj)
+
+
+def approve_finish(root, text="Approved: finish package as listed"):
+    return wj(root, "artifacts/stage5_owner_approval.json", {
+        "claims_sha256": sha(os.path.join(root, "artifacts/stage5_claims.json")),
+        "deliverables": [ref(root, d) for d in DELIVERABLES], "approval_text": text, "approval_timestamp": "2026-11-10T09:00:00-06:00"})
+
+
+def packet_text(root, pid, role="Risk Reviewer", stage="4", inputs=None, extra="", expected="artifacts/stage4/reviews/risk_reviewer_g4c.json",
+                not_allowed="answer key; peer paths before freeze"):
+    inputs = inputs if inputs is not None else ["outputs/ra/summary.csv", "artifacts/gates/G4b.json"]
+    lines = []
+    for x in inputs:
+        if isinstance(x, tuple):
+            lines.append(x[1])
+            continue
+        full = os.path.join(root, x)
+        lines.append(f"  - {x} sha256={sha(full)} bytes={os.path.getsize(full)}")
+    return (f"PACKET_ID: {pid}\nROLE: {role}\nSTAGE: {stage}\n{extra}"
+            f"TASK: Review the reconciled evidence and report findings as must fix or advisory.\n"
+            f"INPUTS:\n" + "\n".join(lines) + "\n"
+            f"ALLOWED TO SEE: the listed inputs\nNOT ALLOWED TO SEE: {not_allowed}\nRULES: review coverage needs whole current files\n"
+            f"EXPECTED OUTPUT:\n  - {expected}\n"
+            f"REPLY ENDS WITH: ANSWERED {pid} + list of produced files\n")
+
+
+def reply_text(pid, produced=("artifacts/stage4/reviews/risk_reviewer_g4c.json",), last=None):
+    body = "Findings recorded in the review file.\n\nPRODUCED FILES:\n" + "".join(f"- {p}\n" for p in produced) + "\n"
+    return body + (last if last is not None else f"ANSWERED {pid}") + "\n"
+
+
+def add_packets(root, packets=None):
+    """One answered Stage 4 packet (G4c review) by default. packets: list of (id, packet text, status, reply text|None)."""
+    packets = packets if packets is not None else [("CASE-4-01", packet_text(root, "CASE-4-01"), "answered", reply_text("CASE-4-01"))]
+    rows = []
+    for pid, body, status, rep in packets:
+        pr = wt(root, f"packets/grok/{pid}.md", body)
+        row = {"id": pid, "path": pr["path"], "status": status, "sha256": pr["sha256"]}
+        if rep is not None:
+            row["reply"] = wt(root, f"replies/grok/{pid}_reply.md", rep)
+        rows.append(row)
+    return wj(root, "artifacts/packets/index.json", {"packets": rows, "forbidden_strings": ["do-not-ship-marker"],
+                                                     "forbidden_path_prefixes": ["keys/"]})

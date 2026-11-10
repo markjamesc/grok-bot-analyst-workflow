@@ -460,14 +460,14 @@ class StageGates(unittest.TestCase):
 
 
 class Runner(unittest.TestCase):
-    def test_not_implemented_is_tool_error(self):
+    def test_unknown_gate_is_tool_error(self):
         with tempfile.TemporaryDirectory() as d:
-            for g in ("G0", "G5", "G6", "nonsense"):
+            for g in ("nonsense", "G7", "PROC"):
                 self.assertEqual(run_gate(g, d)["result"], "TOOL_ERROR")
 
     def test_empty_project_never_passes(self):
         with tempfile.TemporaryDirectory() as d:
-            for g in ORDER + ["GP"]:
+            for g in ORDER + ["GP", "G0", "G5", "G6"]:
                 self.assertIn(run_gate(g, d, record=False)["result"], ("FAIL", "TOOL_ERROR"), g)
 
 

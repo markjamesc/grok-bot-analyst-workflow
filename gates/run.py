@@ -12,9 +12,10 @@ import traceback
 from gates import stage_gates
 from gates.common import FAIL, PASS, TOOL_ERROR, ToolError, now_utc, record_gate
 from gates.gp_assembly import gp
+from gates.packet import g0
 
 GATES = ["G0", "G1", "G2", "G2F", "G3S", "G3K", "G3", "G4a", "G4b", "G4c", "G4d", "G5", "G6", "GP", "PROC"]
-IMPLEMENTED = dict(stage_gates.GATES, GP=gp)
+IMPLEMENTED = dict(stage_gates.GATES, G0=g0, GP=gp)
 NOT_IMPLEMENTED = [g for g in GATES if g not in IMPLEMENTED and g != "PROC"]  # PROC = python3 -m gates.procedure
 
 
