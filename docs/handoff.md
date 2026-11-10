@@ -6,6 +6,7 @@ Every message between the parent and a child is a packet. Packets are sealed onc
 PACKET_ID: <run>-<stage>-<seq>[-vN]
 ROLE: <child role>
 STAGE: <1-5 or 2F>
+SUPERSEDES: <earlier packet id>   (only on a -vN correction)
 TASK: <one paragraph>
 INPUTS:
   - <relative path> sha256=<hash> bytes=<n>   (whole file; parts listed as part k of K)
@@ -16,7 +17,19 @@ EXPECTED OUTPUT: <named output paths and format; parts if large>
 REPLY ENDS WITH: ANSWERED <PACKET_ID> + list of produced files
 ```
 
+Every reply ends like this, with the `PRODUCED FILES:` list never blank and `ANSWERED` as the last line:
+
+```text
+PRODUCED FILES:
+- <path of each file written>
+
+ANSWERED <PACKET_ID>
+```
+
 ## Parent duties
+- List every packet in `artifacts/packets/index.json` (id, path, status draft/sent/answered, sealed sha256, and the sealed reply once answered) and run G0 before each send and after each capture.
+- Build each sent packet from the template as a new file; never send the template. G0 rejects `TEMPLATE` text, `{{placeholders}}` and the format's `<...>` placeholders.
+- A packet is answered only when the child's reply arrives and ends with `ANSWERED <PACKET_ID>`. A file appearing on disk is not a completed send.
 - Record send time, the packet hash, and the captured reply hash in the run ledger.
 - Name the output paths in each packet under EXPECTED OUTPUT. The child writes only to those paths.
 - Check the reply against EXPECTED OUTPUT before sealing it.

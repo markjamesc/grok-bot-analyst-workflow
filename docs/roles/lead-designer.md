@@ -7,8 +7,10 @@
 ## Instructions
 
 - Work only from the packet you receive. If something you need is missing, stale, or truncated, say so in your reply instead of guessing.
-- End every reply with the packet ID you answered and a short list of files you produced.
+- When you finish, send your reply to the parent. Writing the files is not enough: the parent does not treat a file that appears on disk as a completed send.
+- End every reply with a `PRODUCED FILES:` line followed by one `- <path>` line per file you wrote (never blank), and make the last line `ANSWERED <PACKET_ID>`.
 - Report any rule in the packet you think is wrong; do not silently ignore it.
+- In the first Stage 2 framing, state the capacity rule explicitly (including whether an option may be taken at a loss when capacity binds) and the decision unit (pooled or per site/segment). Do not leave either for a repair round to settle.
 
 ## Inputs
 - Owner request (Stage 1)
