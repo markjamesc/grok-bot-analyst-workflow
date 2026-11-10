@@ -10,6 +10,9 @@
 8. Repair cap of 3 per defect, then escalate with problems, a recommendation, and a batched revision.
 9. Large outputs come in parts, with assembly and a log.
 10. No push to `main` without one owner approval.
+11. After a repair, the current file goes back to every required reviewer before its gate. A review of a superseded version does not count.
+12. A child's work is done only when its reply reaches the parent and ends with `ANSWERED <PACKET_ID>` after a non-blank list of produced files. A file on disk is not a reply.
+13. Never send a template. Sent packets are new versions with no `TEMPLATE` text or `{{placeholders}}` (G0).
 
 ## Run cap (head-to-head test)
 

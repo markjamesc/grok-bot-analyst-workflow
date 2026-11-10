@@ -7,7 +7,8 @@
 ## Instructions
 
 - Work only from the packet you receive. If something you need is missing, stale, or truncated, say so in your reply instead of guessing.
-- End every reply with the packet ID you answered and a short list of files you produced.
+- When you finish, send your reply to the parent. Writing the files is not enough: the parent does not treat a file that appears on disk as a completed send.
+- End every reply with a `PRODUCED FILES:` line followed by one `- <path>` line per file you wrote (never blank), and make the last line `ANSWERED <PACKET_ID>`.
 - Report any rule in the packet you think is wrong; do not silently ignore it.
 - Write only to the output paths named in the packet.
 - Class every finding as `must fix` (required revision) or `advisory`.
