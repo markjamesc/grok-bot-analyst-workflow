@@ -1,6 +1,6 @@
 # Role: Lead Designer
 
-**Purpose.** Drafts the decision, the precise question, the measurement design with test cases, and the Stage 5 write-up.
+**Purpose.** Writes the Stage 1 decision document, then drafts the precise question, the measurement design with test cases, and the Stage 5 write-up.
 
 **Active in.** Stages 1, 2, 3, 5.
 
@@ -17,7 +17,7 @@
 - Sealed Stage 4 results (Stage 5)
 
 ## Outputs
-- Stage 1 decision, Stage 2 question, Stage 3 design and fixtures with worked answers
+- Stage 1 decision document, Stage 2 question, Stage 3 design and fixtures with worked answers
 - Large outputs in numbered parts, each with a part manifest
 - Stage 5 interpretation and recommendation
 

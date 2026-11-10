@@ -2,6 +2,13 @@
 
 All notable changes to this design draft are recorded here. Dates are America/Chicago.
 
+## 0.1.3 — 2026-11-09
+
+- Expanded the Risk Reviewer to Stages 2, 3, 4, and 5: Stage 2 framing check (alongside the Second Designer) and G2F review; Stage 3 design red-team and SQL source-gate review; Stage 4 post-reconciliation evidence review (new G4c); Stage 5 audit of every number, with arithmetic recomputation from sealed results allowed and no access to the answer key. Findings are classed must fix (required revision) or advisory. Output paths are named in each packet.
+- Clarified Stage 1: the Lead Designer writes the Stage 1 decision document; the parent pins the workflow and checks it at G1. The Second Designer still has no Stage 1 role.
+- Moved SQL source gates to Stage 3 as G3S (extraction completeness, keys, joins, counts). The SQL Analyst writes them against the design; the parent runs them. G3K remains the parent-owned Python early key/count checks. In Stage 4 the SQL Analyst runs independent SELECT-only queries on the frozen hashed snapshot (not live systems); the parent reconciles SQL against R.
+- Relabeled Stage 4 gates: former G4a (source gates) is now G3S; former G4b (fixtures) is now G4a; former G4c (reconciliation) is now G4b; new G4c is the post-reconciliation review; G4d remains the release gate.
+
 ## 0.1.2 — 2026-11-09
 
 - Clarified the Second Designer's Stage 3 job: it first writes its own independent design from the Stage 3 inputs, without seeing the Lead Designer's draft or reasoning, then compares against the lead's design and reports differences.

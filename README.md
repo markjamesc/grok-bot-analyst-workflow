@@ -20,22 +20,22 @@ Every bot in this version is a Grok Bot, so they share one model family. Separat
 
 | Role | Who | Job |
 |---|---|---|
-| Parent | Data Analysis and Coding bot | Orchestrates, packs and seals work, runs gates, reconciles outputs, escalates. Does not author analysis or interpretation. |
-| Lead Designer | Child bot | Drafts Stages 1–3 and the Stage 5 write-up. |
+| Parent | Data Analysis and Coding bot | Orchestrates, pins the workflow, packs and seals work, runs gates, reconciles outputs, escalates. Does not author analysis or interpretation. |
+| Lead Designer | Child bot | Writes the Stage 1 decision document, drafts Stages 2–3, and writes the Stage 5 write-up. |
 | Second Designer | Child bot | Writes an independent Stage 3 design before seeing the lead's, then compares; also Stage 2 critique and Stage 5 inference review. |
-| Risk Reviewer | Child bot | Risk and numbers audit across design and finish. |
+| Risk Reviewer | Child bot | Checks framing at Stage 2, red-teams the design at Stage 3, reviews source gates and post-reconciliation evidence, and audits every number at Stage 5. |
 | Analyst R-A | Child bot | Independent judged analysis in R. |
 | Analyst R-B | Child bot | Second independent judged analysis in R. Does not see R-A before freeze. |
-| SQL Analyst | Child bot | SELECT-only SQL: data-feasibility check, SQL source gates (parent runs, Risk Reviewer reviews), and an independent SQL computation. |
+| SQL Analyst | Child bot | SELECT-only SQL: data-feasibility check, Stage 3 source gates (parent runs, Risk Reviewer reviews), and an independent Stage 4 computation on the frozen hashed snapshot. |
 
-Role instructions: [docs/roles/](docs/roles/). **Stage 5 reuses these existing bots:** the Lead Designer writes the interpretation, the Second Designer checks the inference, and the Risk Reviewer audits the numbers. There are no dedicated finish bots.
+Role instructions: [docs/roles/](docs/roles/). **Stage 5 reuses these existing bots:** the Lead Designer writes the interpretation, the Second Designer checks the inference, and the Risk Reviewer audits every number (and may recompute arithmetic from sealed results, but never sees the answer key). There are no dedicated finish bots.
 
 ## Stages
 
-1. **Start** — turn a request into a clear decision.
+1. **Start** — the Lead Designer writes the Stage 1 decision document; the parent pins the workflow and checks it at G1.
 2. **Framing** — turn the decision into one precise, locked question.
-3. **Design** — lock how the question will be measured and tested. A **data-feasibility gate** sits between Stage 2 and Stage 3.
-4. **Execution** — write and check the code (R-A, R-B, and SELECT-only SQL).
+3. **Design** — lock how the question will be measured and tested. A **data-feasibility gate** sits between Stage 2 and Stage 3. In Stage 3 the SQL Analyst writes the SQL source gates; the parent runs them.
+4. **Execution** — write and check the code (R-A, R-B, and SELECT-only SQL on the frozen hashed snapshot). The parent reconciles SQL against R; the Risk Reviewer then checks the reconciled evidence.
 5. **Finish** — interpret the sealed results and recommend an action. Scoring happens only after the freeze, by someone who was not a live role.
 
 Details: [docs/stages.md](docs/stages.md) and [docs/explainer.md](docs/explainer.md).
@@ -45,7 +45,7 @@ Details: [docs/stages.md](docs/stages.md) and [docs/explainer.md](docs/explainer
 These are design requirements for this draft. They are not yet implemented as executable code.
 
 1. **Python gates with parity tests** against the current R gates. Skeleton only; not implemented.
-2. **Analysis stays in R.** SQL is SELECT-only (feasibility, source gates, and an independent computation). The parent runs the SQL source gates and reconciles SQL against R. The Risk Reviewer reviews those gates.
+2. **Analysis stays in R.** SQL is SELECT-only (feasibility, Stage 3 source gates, and an independent Stage 4 computation on the frozen hashed snapshot). The parent runs the SQL source gates at Stage 3 and reconciles SQL against R at Stage 4. The Risk Reviewer reviews the source gates and, after reconciliation, the evidence.
 3. **Data-feasibility gate** between Stage 2 and Stage 3: `yes` / `partly` / `no`, with a reason. Stages 1 and 2 stay blind to the data. Data must never shape or add questions. A `partly` or `no` goes to the owner.
 4. **Fewer, clearer rules**, backed by the evidence rules below.
 5. **Greater autonomy.** Escalate only materially consequential analytical or business changes, and genuinely required approvals.
