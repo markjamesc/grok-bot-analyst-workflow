@@ -16,7 +16,7 @@ from decimal import Decimal, InvalidOperation
 
 from gates import methodology as M
 from gates import procedure as P
-from gates import reconcile, repair, sql_select_only
+from gates import guards, reconcile, repair, sql_select_only
 from gates import workflow_gate as WG
 from gates.common import (FAIL, PASS, Gate, ToolError, approval_ok, gate_record_current, ref_current, ref_of,
                           review_checks, safe_rel, sha256_file, text, write_once)
@@ -321,6 +321,7 @@ def g3(root):
     subj = [s for s in d.get("review_subjects", []) if text(s)] if isinstance(d.get("review_subjects"), list) else []
     g.add("Review subjects declared", bool(subj) and GROK_DESIGN in subj and R_STEP["G3"][1] in subj,
           "review_subjects must include the locked design files")
+    design_lock_guards(g, [GROK_DESIGN, R_STEP["G3"][1]] + subj)
     review_checks(g, "artifacts/stage3/reviews/second_designer_compare.json", "second_designer", subj, "Second Designer compare")
     review_checks(g, "artifacts/stage3/reviews/risk_reviewer_red_team.json", "risk_reviewer", subj, "Risk Reviewer red-team")
     review_checks(g, "artifacts/stage3/reviews/risk_reviewer_source_gates.json", "risk_reviewer",
@@ -335,6 +336,27 @@ def g3(root):
           and str(ap.get("design_sha256", "")).lower() == cur_design and str(ap.get("grok_design_sha256", "")).lower() == cur_grok,
           "stage3_owner_approval.json design_sha256 and grok_design_sha256 must equal the current files")
     return g.result()
+
+
+def design_lock_guards(g, rels):
+    """Lessons L11/L12 (gates/guards.py): no template placeholder reference anywhere in the design files or the JSON files
+    they reference, and no blanket ban on labeled descriptive rates."""
+    rels = list(dict.fromkeys(r for r in rels if text(r)))
+    hits = guards.placeholder_refs(g.root, rels)
+    g.add("No template placeholder references in the design", not hits,
+          (guards.describe(hits) + " -- " + guards.TEMPLATE_HINT) if hits else "none")
+    bans = []
+    for rel in rels:
+        body = _read_text(g.root, rel)
+        if body is None:
+            continue
+        if rel.lower().endswith(".json"):
+            obj = _plain(rel, g)
+            body = "\n".join(guards.text_strings(obj)) if obj is not None else body
+        bans += [f"{rel}: {h}" for h in guards.rate_ban_hits(body)]
+    g.add("Descriptive rates not banned", not bans,
+          "labeled descriptive (associational) rates and differences are allowed and expected; restrict causal wording "
+          "instead of banning rates" + (f"; ban found: {bans[:4]}" if bans else ""))
 
 
 def _g3s_sql_paths(root):
@@ -553,6 +575,9 @@ def g5(root):
         lab = f"Claim {x.get('id')}"
         g.add(f"{lab} type within the claim ceiling", x.get("type") in allowed, f"type in {allowed} (locked design)")
         q, dv = x.get("quote"), x.get("deliverable")
+        if guards.states_rate(q):
+            g.add(f"{lab} rate labeled descriptive", guards.rate_claim_labeled(x),
+                  "a rate or difference is reported as descriptive/associational, not causal: say so in `label` or the quote")
         in_dl = text(q) and dv in texts and texts[dv] is not None and q in texts[dv]
         g.add(f"{lab} quoted verbatim from a deliverable", in_dl, "quote must appear verbatim in the named deliverable")
         if in_dl:

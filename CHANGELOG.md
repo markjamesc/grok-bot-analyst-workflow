@@ -2,6 +2,16 @@
 
 All notable changes to this design draft are recorded here. Dates are America/Chicago.
 
+## 0.2.1 — 2026-11-10
+
+Process fixes from the second head-to-head case (no case content or answers). Lessons in docs/lessons.md.
+
+- **Public-file derivability check (new GD, also inside G0).** A role may stop on a missing input or mapping only after the public schema, brief and bundle files were checked. A reply that stops writes `MISSING INPUT: <item>`; a reply that settled it writes `DERIVED: <item> from <path>: <how>` and continues. The parent records each check in `artifacts/derivability.json`. GD/G0 fail an unchecked stop, a derivable item that did not continue, and a "not derivable" item when a public file mentions its search terms and the record does not explain why that file does not settle it. Only non-derivable items are escalated to the owner.
+- **Labeled descriptive rates allowed and expected.** New standing rule. G3 fails a design that bans rates or differences outright (a sentence that only restricts causal wording is fine). G5 fails a claim that states a rate or difference without a descriptive/associational label.
+- **Template placeholder references rejected early.** G0 rejects a packet input that is a template `*.example.json` or a JSON file holding placeholder references (all-zero or `NOT_SET` hashes), and G3 rejects them anywhere in the design files and the JSON files they reference, with a message naming the fix. Before this, only R `finalize` (evidence dependency closure) caught them, at the end of the run.
+- **Supersession in G0.** A packet row may be marked `superseded_by` (a packet in the index, no cycle), `superseded_reason` and `superseded_at`. It keeps its sealed hash but is no longer content-checked or counted as unanswered, so a replaced packet no longer blocks G6.
+- New module `gates/guards.py` (shared checks) and `gates/derivability.py`; regression tests in `gates/tests/test_finish_gates.py` and `gates/tests/test_stage_gates.py`. No R gate logic changed, so R-vs-Python parity is unaffected.
+
 ## 0.2.0 — 2026-11-10
 
 - Implemented and tested **G0 packet integrity** (`gates/packet.py`): every packet in `artifacts/packets/index.json` must keep its sealed hash once sent, carry every handoff field, list whole current inputs (hash and byte count, every part of a split input), take nothing from a forbidden or answer-key path, name the answer key under NOT ALLOWED TO SEE, contain no `TEMPLATE` text or unfilled placeholders, and require `ANSWERED <PACKET_ID>`. An answered packet needs a sealed reply whose last line is `ANSWERED <PACKET_ID>` and whose produced-files list is not blank and covers every expected output. A file on disk is not a completed send.

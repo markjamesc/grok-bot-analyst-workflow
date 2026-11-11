@@ -1,7 +1,7 @@
 """Gate runner: python3 -m gates.run <GATE_ID> <project_root> [--no-record]
 
 Returns PASS, FAIL or TOOL_ERROR (exit 0, 1, 2) and records artifacts/gates/<ID>.json unless --no-record.
-Implemented gates (G0-G6, GP) are listed in IMPLEMENTED; an unknown gate id is TOOL_ERROR and exits 2 (never PASS).
+Implemented gates (G0-G6, GD, GP) are listed in IMPLEMENTED; an unknown gate id is TOOL_ERROR and exits 2 (never PASS).
 """
 from __future__ import annotations
 
@@ -11,11 +11,12 @@ import traceback
 
 from gates import stage_gates
 from gates.common import FAIL, PASS, TOOL_ERROR, ToolError, now_utc, record_gate
+from gates.derivability import gd
 from gates.gp_assembly import gp
 from gates.packet import g0
 
-GATES = ["G0", "G1", "G2", "G2F", "G3S", "G3K", "G3", "G4a", "G4b", "G4c", "G4d", "G5", "G6", "GP", "PROC"]
-IMPLEMENTED = dict(stage_gates.GATES, G0=g0, GP=gp)
+GATES = ["G0", "GD", "G1", "G2", "G2F", "G3S", "G3K", "G3", "G4a", "G4b", "G4c", "G4d", "G5", "G6", "GP", "PROC"]
+IMPLEMENTED = dict(stage_gates.GATES, G0=g0, GD=gd, GP=gp)
 NOT_IMPLEMENTED = [g for g in GATES if g not in IMPLEMENTED and g != "PROC"]  # PROC = python3 -m gates.procedure
 
 

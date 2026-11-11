@@ -289,6 +289,140 @@ class FinishGates(unittest.TestCase):
         os.remove(os.path.join(r, "artifacts/packets/index.json"))
         self.assertFailsOn("G0", r, "Packet index parses")
 
+    # ---------------------------------------------------------------- G0 lessons L10/L11/L13 (head-to-head 2026-11-10)
+    def _mark(self, r, sup):
+        """sup: {packet id: {superseded_by, superseded_reason, superseded_at}} applied to the index rows."""
+        idx = F.rj(r, "artifacts/packets/index.json")
+        for row in idx["packets"]:
+            row.update(sup.get(row["id"], {}))
+        F.wj(r, "artifacts/packets/index.json", idx)
+
+    def _with_failed_packets(self, r):
+        """Regression: three sent packets that fail G0 (expected failures, later replaced) blocked G6 for good."""
+        rows = [("CASE-4-01", F.packet_text(r, "CASE-4-01"), "answered", F.reply_text("CASE-4-01"))]
+        for pid in ("CASE-5-11", "CASE-5-12", "CASE-5-14"):
+            rows.append((pid, F.packet_text(r, pid) + "TEMPLATE note left in\n", "sent", None))
+        self.packets(r, rows)
+        return {pid: {"superseded_by": "CASE-4-01", "superseded_reason": "Sent with a template note; replaced by a corrected packet",
+                      "superseded_at": "2026-11-10T18:10:59-06:00"} for pid in ("CASE-5-11", "CASE-5-12", "CASE-5-14")}
+
+    def test_g0_superseded_packets_no_longer_block_g6(self):
+        r = self.copy()
+        sup = self._with_failed_packets(r)
+        self.assertFailsOn("G0", r, "Packet CASE-5-11 no template leftovers")
+        self.assertFailsOn("G6", r, "G0 PASS and current")
+        self._mark(r, sup)
+        rec = run_gate("G0", r)
+        self.assertEqual(rec["result"], "PASS", failed(rec))
+        self.assertEqual(rec["superseded"], ["CASE-5-11", "CASE-5-12", "CASE-5-14"])
+        self.assertEqual(rec["unanswered"], [])
+        rec6 = run_gate("G6", r)
+        self.assertEqual(rec6["result"], "PASS", failed(rec6))
+
+    def test_g0_supersession_record_must_be_complete(self):
+        bad = {"superseded_by": ("CASE-9-99", "superseded by a packet in the index"),
+               "superseded_reason": ("TBD", "supersession reason"),
+               "superseded_at": ("yesterday", "supersession time")}
+        for key, (value, check) in bad.items():
+            with self.subTest(field=key):
+                r = self.copy()
+                sup = self._with_failed_packets(r)
+                sup["CASE-5-11"][key] = value
+                self._mark(r, sup)
+                self.assertFailsOn("G0", r, f"Packet CASE-5-11 {check}")
+        r = self.copy()
+        sup = self._with_failed_packets(r)
+        sup["CASE-5-11"]["superseded_by"] = "CASE-5-12"; sup["CASE-5-12"]["superseded_by"] = "CASE-5-11"
+        self._mark(r, sup)
+        self.assertFailsOn("G0", r, "Packet CASE-5-11 superseded by a packet in the index")
+
+    def test_g0_superseded_packet_stays_sealed(self):
+        r = self.copy()
+        sup = self._with_failed_packets(r)
+        self._mark(r, sup)
+        with open(os.path.join(r, "packets/grok/CASE-5-12.md"), "a") as fh:
+            fh.write("edited after send\n")
+        self.assertFailsOn("G0", r, "Packet CASE-5-12 sealed hash current (superseded)")
+
+    def test_g0_template_json_attached_as_input(self):
+        # Regression: the design template (placeholder fixtures, all-zero hashes) was attached to Stage 3 packets.
+        r = self.copy()
+        F.wj(r, "r_framework_pin/templates/methodology/design.example.json",
+             {"operational": {"fixture_inputs": {"path": "fixtures/input.csv", "sha256": "0" * 64}}})
+        F.wj(r, "inputs/design_shape.json", {"fixture_expected": {"path": "fixtures/expected.json", "sha256": "0" * 64}})
+        for rel in ("r_framework_pin/templates/methodology/design.example.json", "inputs/design_shape.json"):
+            with self.subTest(input=rel):
+                self._one(r, F.packet_text(r, "CASE-4-01", inputs=["outputs/ra/summary.csv", rel]))
+                self.assertFailsOn("G0", r, "no template placeholder references")
+
+    PUBLIC = {"public/schema.md": "Columns: visit_id; site (text: Oak or Pine); notice (text: yes = a notice was sent, no = none); kept (0/1).\n",
+              "public/brief.md": "Two sites, Oak and Pine, both run without notices today. Should we buy notices next month?\n"}
+
+    def _stop_reply(self, r, pid="CASE-4-01"):
+        rep = ("Cannot finish: two mappings are missing.\nMISSING INPUT: notice flag value meaning\nMISSING INPUT: site mapping\n\n"
+               "PRODUCED FILES:\n- artifacts/stage4/reviews/risk_reviewer_g4c.json\n\nANSWERED " + pid + "\n")
+        for k, v in self.PUBLIC.items():
+            F.wt(r, k, v)
+        self._one(r, F.packet_text(r, pid, inputs=["outputs/ra/summary.csv"] + list(self.PUBLIC)), rep=rep, pid=pid)
+
+    def _items(self, r, derivable):
+        items = [{"id": "D1", "stage": "4", "raised_in": "CASE-4-01", "item": "notice flag value meaning", "search_terms": ["notice"]},
+                 {"id": "D2", "stage": "4", "raised_in": "CASE-4-01", "item": "site mapping", "search_terms": ["site"]}]
+        for i in items:
+            if derivable:
+                i.update(derivable=True, resolution="continued", derived_from=["public/schema.md"],
+                         derivation="schema: notice yes = sent (on), no = none" if i["id"] == "D1" else "schema and brief: sites are Oak and Pine")
+            else:
+                i.update(derivable=False, resolution="escalated_to_owner", not_derivable_reason="mapping not supplied",
+                         escalated_at="2026-11-10T16:00:00-06:00")
+        F.wj(r, "artifacts/derivability.json", {"public_sources": [F.ref(r, k) for k in self.PUBLIC], "items": items})
+
+    def test_g0_stop_on_derivable_mapping_is_rejected(self):
+        # Regression: a run stopped as "unresolved" on a value meaning and an entity mapping that the public schema and
+        # brief already gave. The stop must be checked against the public files first.
+        r = self.copy()
+        self._stop_reply(r)
+        rec = self.assertFailsOn("G0", r, "Derivability: Every MISSING INPUT checked against public files")
+        self.assertIn("notice flag value meaning", str(rec["checks"]))
+        self.assertEqual(run_gate("GD", r)["result"], "FAIL")
+        self._items(r, derivable=False)
+        rec = self.assertFailsOn("G0", r, "Derivability: Item D1 public mentions ruled out")
+        self.assertIn("Derivability: Item D2 public mentions ruled out", failed(rec))
+        self._items(r, derivable=True)
+        rec = run_gate("G0", r)
+        self.assertEqual(rec["result"], "PASS", failed(rec))
+        self.assertEqual(run_gate("GD", r)["result"], "PASS")
+
+    def test_g0_derivable_item_cannot_stop_and_sources_must_be_public(self):
+        r = self.copy()
+        self._stop_reply(r)
+        self._items(r, derivable=True)
+        d = F.rj(r, "artifacts/derivability.json"); d["items"][0]["resolution"] = "escalated_to_owner"
+        F.wj(r, "artifacts/derivability.json", d)
+        self.assertFailsOn("G0", r, "Derivability: Item D1 work continues")
+        F.wt(r, "private/notes.md", "x\n")
+        d["items"][0]["resolution"] = "continued"; d["public_sources"].append(F.ref(r, "private/notes.md"))
+        F.wj(r, "artifacts/derivability.json", d)
+        self.assertFailsOn("G0", r, "Derivability: Public sources listed and current")
+
+    def test_gd_passes_when_nothing_raised(self):
+        self.assertEqual(run_gate("GD", self.copy(), record=False)["result"], "PASS")
+
+    # ---------------------------------------------------------------- G5 lesson L12: labeled descriptive rates
+    def test_g5_rate_claim_must_be_labeled_descriptive(self):
+        r = self.copy()
+        q = "Kept rate was 70% with notices vs 45% without (+25 points)."
+        F.wt(r, "stage5-evidence.md", q + "\n")
+        c = self.claims(r)
+        c[0]["quote"] = q
+        c[0]["derived"] = [{"value": v, "basis": "recomputed from the sealed summary"} for v in ("70", "45", "25")]
+        self.plant_claims(r, c)
+        self.assertFailsOn("G5", r, "Claim C1 rate labeled descriptive")
+        c[0]["label"] = "descriptive (associational), not causal"
+        self.plant_claims(r, c)
+        rec = run_gate("G5", r)
+        self.assertNotIn("Claim C1 rate labeled descriptive", failed(rec))
+
     # ---------------------------------------------------------------- G5 planted defects
     def claims(self, r):
         return F.rj(r, "artifacts/stage5_claims.json")["claims"]

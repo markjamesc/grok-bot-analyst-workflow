@@ -13,6 +13,8 @@ Each step is: parent packs → child works → parent captures and seals → gat
 | Score | Scorer outside live roles (earlier ChatGPT key preparer) | — | — | — |
 
 ## Notes
+- **Before any stop on a missing input.** A child that finds an input or mapping missing first checks the public schema, brief and bundle files in its packet. If they settle it, it writes `DERIVED: <item> from <path>: <how>` and keeps working. Only if they do not does it stop with `MISSING INPUT: <item>`. The parent re-checks the public files, records the result in `artifacts/derivability.json` and runs GD (G0 runs the same checks): a derivable item goes back to the child as a new `-vN` packet with the derivation; only a non-derivable item is escalated to the owner. No stage closes as "unresolved" on a derivable item.
+- Descriptive rates and differences are part of the expected Stage 4 and 5 results when the question compares groups. Label them descriptive or associational, never causal (G3, G5).
 - Every packet passes G0 (packet integrity) before it is sent, and every reply is checked by G0 when captured. A child's work counts only when its reply ends with `ANSWERED <PACKET_ID>` after a non-blank list of produced files.
 - After a repair of a reviewed file (for example a Stage 2 framing repair), the current version goes back to the required reviewers before the gate. G2, G3 and G5 fail a review of a superseded file.
 - The first Stage 2 framing states the capacity rule (including whether an option may be taken at a loss) and the decision unit (pooled or per site/segment) explicitly.

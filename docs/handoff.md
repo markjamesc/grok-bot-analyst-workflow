@@ -26,6 +26,18 @@ PRODUCED FILES:
 ANSWERED <PACKET_ID>
 ```
 
+A reply that settled a missing item from the public files says so before the list, one line per item, and keeps working:
+
+```text
+DERIVED: <item> from <public file path>: <how>
+```
+
+A reply that must stop because the public files do not settle an item says so, one line per item:
+
+```text
+MISSING INPUT: <item>
+```
+
 ## Parent duties
 - List every packet in `artifacts/packets/index.json` (id, path, status draft/sent/answered, sealed sha256, and the sealed reply once answered) and run G0 before each send and after each capture.
 - Build each sent packet from the template as a new file; never send the template. G0 rejects `TEMPLATE` text, `{{placeholders}}` and the format's `<...>` placeholders.
@@ -34,6 +46,9 @@ ANSWERED <PACKET_ID>
 - Name the output paths in each packet under EXPECTED OUTPUT. The child writes only to those paths.
 - Check the reply against EXPECTED OUTPUT before sealing it.
 - A correction is a new packet with a `-vN` suffix that names what it supersedes.
+- When a packet is replaced (for example a sent packet that failed G0), mark the old row in `artifacts/packets/index.json` with `superseded_by` (the newer packet id), `superseded_reason` and `superseded_at` (ISO timestamp with zone). Never edit or reseal the old packet.
+- List the public schema, brief and bundle files as inputs in every packet that might need them, so a child can derive a value meaning or a mapping instead of stopping.
+- Never attach a template JSON (`*.example.json`) or any JSON with placeholder references as an input. Attach the adapted, real file or a prose summary (G0).
 
 ## Stage 3 packets for the Second Designer
 - First packet: Stage 3 inputs only. Do not include the Lead Designer's draft or reasoning.

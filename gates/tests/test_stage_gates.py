@@ -329,6 +329,54 @@ class StageGates(unittest.TestCase):
         F.review(r, "artifacts/stage3/reviews/risk_reviewer_source_gates.json", "risk_reviewer", ["artifacts/stage3/source_gates/manifest.json"])
         self.assertFailsOn("G3", r, "Risk Reviewer source-gate review coverage")
 
+    # ---------------------------------------------------------------- G3 lessons L11/L12 (head-to-head 2026-11-10)
+    TEMPLATE_JSON = {"operational": {"fixture_inputs": {"path": "fixtures/input.csv", "sha256": "0" * 64},
+                                     "fixture_expected": {"path": "fixtures/expected.json", "sha256": "0" * 64},
+                                     "oracle_basis": "NOT_SET__independent justification"}}
+
+    def test_g3_design_references_template_with_placeholder_fixtures(self):
+        # Regression: the pinned design template (placeholder fixtures, all-zero hashes) travelled with Stage 3 and only
+        # R `finalize` noticed. G3 now stops it at the design lock with a message that names the file and the fix.
+        r = self.copy()
+        tpl = F.wj(r, "r_framework_pin/templates/methodology/design.example.json", self.TEMPLATE_JSON)
+        copy_ = F.wj(r, "inputs/stage3/design_shape.json", self.TEMPLATE_JSON)
+        d = F.rj(r, "artifacts/stage3_grok_design.json"); d["shape_example"] = copy_; F.wj(r, "artifacts/stage3_grok_design.json", d)
+        F.approve_design(r)
+        rec = self.assertFailsOn("G3", r, "No template placeholder references in the design")
+        det = [c["detail"] for c in rec["checks"] if c["check"] == "No template placeholder references in the design"][0]
+        self.assertIn("fixtures/input.csv (all-zero sha256)", det)
+        self.assertIn("finalize", det)
+        d["shape_example"] = tpl; F.wj(r, "artifacts/stage3_grok_design.json", d); F.approve_design(r)
+        rec = self.assertFailsOn("G3", r, "No template placeholder references in the design")
+        self.assertIn("reference to a template file", str(rec["checks"]))
+
+    def test_g3_good_project_has_no_placeholder_or_rate_ban(self):
+        names = {c["check"]: c["result"] for c in self.records["G3"]["checks"]}
+        self.assertEqual(names.get("No template placeholder references in the design"), "PASS")
+        self.assertEqual(names.get("Descriptive rates not banned"), "PASS")
+
+    def test_g3_blanket_rate_ban_rejected(self):
+        # Regression: a design rule refused to report descriptive rates (two group rates and their difference) at all.
+        for ban in ("No rates: report counts only.", "Do not report rates or rate differences between the groups.",
+                    "Rates are not to be reported in the finish."):
+            with self.subTest(ban=ban):
+                r = self.copy()
+                d = F.rj(r, "artifacts/stage3_grok_design.json"); d["reporting_rules"] = [ban]
+                F.wj(r, "artifacts/stage3_grok_design.json", d); F.approve_design(r)
+                self.assertFailsOn("G3", r, "Descriptive rates not banned")
+
+    def test_g3_labeled_descriptive_rates_allowed(self):
+        r = self.copy()
+        d = F.rj(r, "artifacts/stage3_grok_design.json")
+        d["reporting_rules"] = ["Report each group's rate and the difference in points, labeled descriptive (associational).",
+                                "Do not present the rate difference as a causal effect of the program."]
+        F.wj(r, "artifacts/stage3_grok_design.json", d); F.approve_design(r)
+        F.review(r, "artifacts/stage3/reviews/second_designer_compare.json", "second_designer", d["review_subjects"])
+        F.review(r, "artifacts/stage3/reviews/risk_reviewer_red_team.json", "risk_reviewer", d["review_subjects"])
+        self.assertEqual(run_gate("G3K", r)["result"], "PASS")
+        rec = run_gate("G3", r)
+        self.assertEqual(rec["result"], "PASS", failed(rec))
+
     # ---------------------------------------------------------------- G4a
     def test_g4a_sql_fixture_wrong(self):
         r = self.copy()

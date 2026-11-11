@@ -19,13 +19,22 @@ Checks every packet in the index:
 - an answered packet has a sealed reply whose produced-files list is not blank, lists every EXPECTED OUTPUT path,
   names only existing files, and whose last non-empty line is `ANSWERED <PACKET_ID>`. A file that appears on disk
   is not a completed send: without that reply the packet stays unanswered (reported in `unanswered`; G6 refuses it).
+- a packet may be marked superseded in the index (`superseded_by`, `superseded_reason`, `superseded_at`): the newer packet
+  must be in the index, the reason must be real text and the time an ISO timestamp. A superseded packet keeps its
+  sealed hash (history is never rewritten) but its content and reply checks are not applied, it is not counted as
+  unanswered, and it is reported in `superseded`, so a replaced packet no longer blocks G6;
+- no input is a JSON file holding template placeholder references (all-zero or NOT_SET hashes, or a template
+  `*.example.json`): R `finalize` walks every referenced JSON file and would fail on them (gates/guards.py);
+- every `MISSING INPUT: <item>` line in a sealed reply was checked against the public files (gates/derivability.py).
 """
 from __future__ import annotations
 
 import os
 import re
 
-from gates.common import Gate, PLACEHOLDER_RE, ref_current, safe_rel, sha256_file, text
+from gates import guards
+from gates.common import Gate, PLACEHOLDER_RE, TIMESTAMP_RE, ref_current, safe_rel, sha256_file, text
+from gates.derivability import derivability_checks, raised_in_replies
 
 INDEX = "artifacts/packets/index.json"
 FIELDS = ["PACKET_ID", "ROLE", "STAGE", "TASK", "INPUTS", "ALLOWED TO SEE", "NOT ALLOWED TO SEE", "RULES",
@@ -103,14 +112,55 @@ def g0(root):
     fs = [s for s in fs if text(s)] if isinstance(fs, list) else []
     fp = idx.get("forbidden_path_prefixes", [])
     fp = DEFAULT_FORBIDDEN_PREFIXES + ([s for s in fp if text(s)] if isinstance(fp, list) else [])
-    unanswered = []
+    unanswered, superseded = [], []
+    by_id = {p.get("id"): p for p in pk if isinstance(p, dict)}
     for p in pk:
-        if isinstance(p, dict):
-            _check_packet(g, root, p, set(ids), fs, fp)
-            if p.get("status") != "answered":
-                unanswered.append(p.get("id"))
+        if not isinstance(p, dict):
+            continue
+        if _is_superseded(p):
+            _check_superseded(g, root, p, by_id)
+            superseded.append(p.get("id"))
+            continue
+        _check_packet(g, root, p, set(ids), fs, fp)
+        if p.get("status") != "answered":
+            unanswered.append(p.get("id"))
+    derivability_checks(g, root, raised_in_replies(root, [p for p in pk if isinstance(p, dict)]), forbidden_prefixes=tuple(fp),
+                        prefix="Derivability: ")
     g.extra["unanswered"] = unanswered
+    g.extra["superseded"] = superseded
     return g.result()
+
+
+SUPERSEDE_KEYS = ("superseded_by", "superseded_reason", "superseded_at")
+
+
+def _is_superseded(p):
+    return any(k in p for k in SUPERSEDE_KEYS)
+
+
+def _check_superseded(g, root, p, by_id):
+    """A superseded packet: sealed hash still current; a valid pointer to a newer packet, a reason and a timestamp."""
+    pid = p.get("id")
+    lab = f"Packet {pid}"
+    new = p.get("superseded_by")
+    chain, cur = [pid], new
+    while cur in by_id and cur not in chain and _is_superseded(by_id[cur]):
+        chain.append(cur)
+        cur = by_id[cur].get("superseded_by")
+    g.add(f"{lab} superseded by a packet in the index", text(new) and new != pid and new in by_id and cur in by_id and cur not in chain,
+          f"superseded_by must name another packet in the index (no cycle); got {new!r}")
+    reason = p.get("superseded_reason")
+    g.add(f"{lab} supersession reason", text(reason) and not PLACEHOLDER_RE.search(reason), "superseded_reason: why it was replaced")
+    at = p.get("superseded_at")
+    g.add(f"{lab} supersession time", isinstance(at, str) and TIMESTAMP_RE.match(at) is not None,
+          "superseded_at: ISO timestamp with zone, e.g. 2026-11-10T18:10:59-06:00")
+    rel = p.get("path")
+    full = safe_rel(root, rel) if text(rel) else None
+    if p.get("status") in ("sent", "answered"):
+        ok = full is not None and os.path.isfile(full) and ref_current(root, {"path": rel, "sha256": p.get("sha256")})
+        g.add(f"{lab} sealed hash current (superseded)", ok, "a superseded packet that was sent stays sealed: history is kept, not rewritten")
+        if ok:
+            g.use(rel)
 
 
 def _check_packet(g, root, p, all_ids, forbidden_strings, forbidden_prefixes):
@@ -163,6 +213,9 @@ def _check_packet(g, root, p, all_ids, forbidden_strings, forbidden_prefixes):
     incomplete = [f"{d or '.'}: parts {sorted(ks)} of {K}" for (d, K), ks in parts.items() if ks != set(range(1, K + 1))]
     g.add(f"{lab} split inputs complete", not incomplete, f"missing parts: {incomplete}" if incomplete else "ok")
     g.add(f"{lab} no forbidden inputs", not forbidden, f"forbidden: {forbidden}" if forbidden else f"prefixes {forbidden_prefixes}")
+    tph = guards.placeholder_refs(root, [m.group("path") for m in (INPUT_RE.match(x) for x in in_lines) if m])
+    g.add(f"{lab} no template placeholder references", not tph,
+          (guards.describe(tph) + " -- " + guards.TEMPLATE_HINT) if tph else "none")
     nats = " ".join(f.get("NOT ALLOWED TO SEE") or [])
     g.add(f"{lab} answer key withheld", ANSWER_KEY_NAME.search(nats) is not None, "NOT ALLOWED TO SEE must name the answer key")
     # leftover template / forbidden content
