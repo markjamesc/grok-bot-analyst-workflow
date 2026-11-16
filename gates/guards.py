@@ -5,7 +5,9 @@
   (evidence dependency closure), so one such reference fails the whole run at the very end. G0 rejects them in packet
   inputs and G3 rejects them at the design lock, with a message that says what to fix.
 - rate_ban_hits: a blanket ban on reporting rates or differences. Labeled descriptive (associational) rates are allowed and
-  expected; only causal wording is restricted. G3 rejects a design that bans them.
+  expected; only causal wording is restricted. G3 rejects a design that bans them. A statement of what has or has not been
+  computed or seen yet (exposure) is not a ban, and methodology `exposure` / `results_seen` values are not scanned.
+- nested_refs: every {path, sha256} reference inside a JSON object (used by the stale-reference check, case02 A10).
 - rate_claim_labeled: a claim that states a rate or a difference must carry a descriptive/associational (not causal) label.
 """
 from __future__ import annotations
@@ -33,6 +35,14 @@ def _refs(x):
     elif isinstance(x, list):
         for v in x:
             yield from _refs(v)
+
+
+def nested_refs(obj):
+    """Every {path, sha256} reference (path text, sha256 a 64-hex string) anywhere inside a JSON object."""
+    for r in _refs(obj):
+        if isinstance(r.get("path"), str) and r["path"].strip() and isinstance(r.get("sha256"), str) \
+                and re.fullmatch(r"[0-9A-Fa-f]{64}", r["sha256"].strip()):
+            yield r
 
 
 def _load(full):
@@ -100,6 +110,11 @@ RATE_BAN_RES = [
                re.IGNORECASE),
 ]
 CAUSAL_QUALIFIER = re.compile(r"caus|effect|impact|attribut|lift|uplift", re.IGNORECASE)
+# An exposure statement says what has (not) been computed or seen so far; it is not a ban (case02 change A6:
+# "no rate, gap or decision ... has been computed or seen" was flagged). Exposure fields are skipped in JSON as well.
+EXPOSURE_SENTENCE = re.compile(r"\b(?:has|have|had|was|were)\s+(?:not\s+)?(?:yet\s+)?(?:been\s+)?(?:computed|seen|calculated|run|viewed|opened)\b",
+                               re.IGNORECASE)
+EXPOSURE_KEYS = ("exposure", "results_seen")
 
 
 def rate_ban_hits(text):
@@ -107,21 +122,24 @@ def rate_ban_hits(text):
     ("do not present the rate difference as a causal effect") is allowed."""
     hits = []
     for sent in re.split(r"(?<=[.;!?])\s+|\n+", text or ""):
-        if any(rx.search(sent) for rx in RATE_BAN_RES) and not CAUSAL_QUALIFIER.search(sent):
+        strong = any(rx.search(sent) for rx in RATE_BAN_RES[1:])
+        exposure_only = not strong and EXPOSURE_SENTENCE.search(sent) is not None
+        if (strong or RATE_BAN_RES[0].search(sent)) and not CAUSAL_QUALIFIER.search(sent) and not exposure_only:
             hits.append(sent.strip()[:160])
     return hits
 
 
-def text_strings(obj):
-    """Every string value inside a JSON object (keys excluded)."""
+def text_strings(obj, skip_keys=()):
+    """Every string value inside a JSON object (keys excluded). Values under a key in `skip_keys` are left out."""
     if isinstance(obj, str):
         yield obj
     elif isinstance(obj, dict):
-        for v in obj.values():
-            yield from text_strings(v)
+        for k, v in obj.items():
+            if k not in skip_keys:
+                yield from text_strings(v, skip_keys)
     elif isinstance(obj, list):
         for v in obj:
-            yield from text_strings(v)
+            yield from text_strings(v, skip_keys)
 
 
 RATE_FIGURE = re.compile(r"\d(?:[\d,]*\.?\d*)\s*(?:%|percent\b|per\s*cent\b|percentage\s+points?\b|pts?\b|pp\b)", re.IGNORECASE)

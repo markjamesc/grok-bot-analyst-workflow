@@ -9,21 +9,22 @@ and on the gate fixtures.
 
 | ID | Status | Module | R checks inside (parity-tested port) | Tests |
 |---|---|---|---|---|
-| G0 Packet integrity | Implemented, tested | `packet.g0` | none (no R counterpart: the R gate has no packet format) | good path + 17 faults + supersession (3), template-input and derivability (2) tests |
+| G0 Packet integrity | Implemented, tested | `packet.g0` | none (no R counterpart: the R gate has no packet format) | good path + 17 faults + supersession (3), template-input and derivability (2) tests + captured/promote (5) and "MISSING INPUT: none." (2) tests (`test_case03_changes.py`) |
 | GD Public-file derivability | Implemented, tested | `derivability.gd` (also run inside G0) | none (no R counterpart) | Case-C-style regression + 2 faults + nothing-raised path |
 | G1 Decision | Implemented, tested | `stage_gates.g1` | R `complete start` checks (validate_stage_receipt + operations ledger + closure) | good path + 5 faults |
 | G2 Question lock | Implemented, tested | `stage_gates.g2` | R `complete framing` checks | good path + 6 faults |
 | G2F Feasibility | Implemented, tested | `stage_gates.g2f` | none (no R equivalent) | good path + 6 faults |
 | G3S SQL source-gate runner | Implemented, tested (sqlite engine only) | `stage_gates.g3s`, `sql_select_only` | none (no R equivalent) | good path + 6 faults + authorizer + TOOL_ERROR |
 | G3K Early key/count checks | Implemented, tested | `stage_gates.g3k`, `repair` | none (no R equivalent) | good path + 4 faults + 3 repair-cap tests |
-| G3 Design lock | Implemented, tested | `stage_gates.g3` | R `complete design` checks (incl. m_design, m_ai) | good path + 7 faults + template-placeholder and descriptive-rate tests (4) |
+| G3 Design lock | Implemented, tested | `stage_gates.g3` | R `complete design` checks (incl. m_design, m_ai) | good path + 7 faults + template-placeholder and descriptive-rate tests (4) + next-stage entry (3), version (3), threshold-field (2) and exposure (1) tests (`test_case03_changes.py`) |
 | G4a Fixtures | Implemented, tested | `stage_gates.g4a`, `reconcile` | ported R m_compare run on every pair | good path + 3 faults |
 | G4b Reconciliation | Implemented, tested | `stage_gates.g4b`, `reconcile` | ported R m_compare run on every pair | good path + 8 tests |
 | G4c Post-reconciliation review | Implemented, tested | `stage_gates.g4c` | none (no R equivalent) | good path + 3 faults |
 | G4d Release | Implemented, tested | `stage_gates.g4d` | R `complete execution` checks + the whole ported R Workflow Gate | good path + 6 faults + R-report kept |
-| G5 Claims | Implemented, tested | `stage_gates.g5` | R `complete finish` checks (validate_stage_receipt incl. m_finish claim ledger and m_ai, operations ledger, closure) | good path + 12 faults; R stage-check parity |
-| G5P Stage 5 precheck | Implemented, tested | `stage_gates.g5p` | none (runs exactly the G5 claim and content checks; no R or review checks) | mirror test + unplaced-ledger, CSV, path, threshold and hold tests (`test_case02_changes.py`) |
+| G5 Claims | Implemented, tested | `stage_gates.g5` | R `complete finish` checks (validate_stage_receipt incl. m_finish claim ledger and m_ai, operations ledger, closure) | good path + 12 faults; R stage-check parity; companion (2), status-word and triage (4), uncovered_claims and finding-id (3) tests (`test_case03_changes.py`) |
+| G5P Stage 5 precheck | Implemented, tested | `stage_gates.g5p` | none (runs exactly the G5 claim and content checks; no R or review checks) | mirror test + unplaced-ledger, CSV, path, threshold and hold tests (`test_case02_changes.py`); companion, status-word and stale-reference tests (`test_case03_changes.py`) |
 | G6 Certificate | Implemented, tested | `stage_gates.g6` | requires the R `finalize` certificate (ported in `procedure.py`) and re-checks every hash it recorded | good path + 10 faults; R vs Python `finalize` verdict parity |
+| Stage close check | Implemented, tested | `close.close_check` (`python3 -m gates.close`) | none (reads recorded verdicts) | certified-base PASS + G3 FAIL refused + changed input + missing record + CLI exit codes (`test_case03_changes.py`) |
 | GP Assembly regression | Implemented, tested | `gp_assembly`, `assembly` | none | 16 assembly + 6 GP tests |
 | Repair cap (3, then ESCALATE) | Implemented, tested | `repair` | — | in G3K/G4d tests |
 | R Workflow Gate port | Implemented, parity-tested | `workflow_gate.py` (+ `methodology.py`, `rsem.py`) | all | 27 whole-gate + 1,200+ function-level parity comparisons |
@@ -34,6 +35,8 @@ and on the gate fixtures.
 ```
 python3 -m gates.run <GATE_ID> <project_root>        # exit 0 PASS, 1 FAIL, 2 TOOL_ERROR; writes artifacts/gates/<ID>.json
 python3 -m gates.run G5P <project_root> --ledger=<claims json>   # precheck any ledger before review or placement
+python3 -m gates.close <CLOSING_GATE> <project_root>  # exit 0 only if the stage may be sealed closed (G1 G2 G2F G3 G4d G5 G6)
+python3 -m gates.packet promote <project_root> <packet id>   # captured -> answered, only on a G0 PASS
 python3 -m gates.workflow_gate <project_root> [--dry-run]
 GATES_FRAMEWORK_ROOT=<R repo> python3 -m gates.procedure start|begin|complete|status|finalize|amend|successor <root> ...
 python3 -m gates.assembly <project_root> <split.json> [--report-only]

@@ -18,7 +18,8 @@ Input: artifacts/derivability.json
               "term_hits_reviewed": [{"path", "why_not_derivable"}]}]}                  every public file that mentions a term
 
 Checks:
-- every `MISSING INPUT:` line in an answered packet's sealed reply has an item (same packet id and text);
+- every `MISSING INPUT:` line in an answered (or captured) packet's sealed reply has an item (same packet id and text);
+  a line that says only `none` or `nothing` (with or without a full stop) is not a missing input and is skipped;
 - public sources are listed, current, and none is private or an answer key;
 - a derivable item records its derivation, cites public sources it was derived from, and continues;
 - a non-derivable item is escalated to the owner with a reason and timestamp, and explains, file by file, why each
@@ -46,8 +47,13 @@ def _norm(s):
     return re.sub(r"\s+", " ", s.strip().lower())
 
 
+# A reply that has nothing missing sometimes still writes the line with "none". That is not a missing input
+# (case02 change A3): it is skipped here so it does not fail the gate. Real items are still checked.
+NONE_ITEM_RE = re.compile(r"^\s*(?:none|nothing)\s*[.!]?\s*$", re.IGNORECASE)
+
+
 def missing_lines(body):
-    return [m.group(1) for m in MISSING_RE.finditer(body or "")]
+    return [m.group(1) for m in MISSING_RE.finditer(body or "") if not NONE_ITEM_RE.match(m.group(1))]
 
 
 def _read(full):
@@ -116,11 +122,11 @@ def derivability_checks(g, root, raised=None, forbidden_prefixes=("private/",), 
 
 
 def raised_in_replies(root, packets):
-    """[(packet id, item)] from the sealed replies of answered packets."""
+    """[(packet id, item)] from the sealed replies of answered and captured packets."""
     out = []
     for p in packets:
         r = p.get("reply") if isinstance(p, dict) else None
-        if p.get("status") == "answered" and ref_current(root, r):
+        if p.get("status") in ("answered", "captured") and ref_current(root, r):
             out += [(str(p.get("id")), it) for it in missing_lines(_read(safe_rel(root, r["path"])))]
     return out
 

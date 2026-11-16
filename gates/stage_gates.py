@@ -329,6 +329,9 @@ def g3(root):
           "review_subjects must include the locked design files")
     design_lock_guards(g, [GROK_DESIGN, R_STEP["G3"][1]] + subj)
     lock_completeness_checks(g, d, outs)
+    next_stage_entry_checks(g, root, d)
+    design_version_checks(g, _plain(R_STEP["G3"][1], g))
+    stale_nested_ref_checks(g, root, "design")
     review_checks(g, "artifacts/stage3/reviews/second_designer_compare.json", "second_designer", subj, "Second Designer compare")
     review_checks(g, "artifacts/stage3/reviews/risk_reviewer_red_team.json", "risk_reviewer", subj, "Risk Reviewer red-team")
     review_checks(g, "artifacts/stage3/reviews/risk_reviewer_source_gates.json", "risk_reviewer",
@@ -381,10 +384,10 @@ def lock_completeness_checks(g, d, outs):
           "the locked design must carry every Stage 3 field the R Workflow Gate reads at G4d" + (f"; missing: {gaps}" if gaps else ""))
     th = d.get("decision_thresholds")
     th_ok = isinstance(th, list) and len(th) > 0 and all(
-        isinstance(t, dict) and text(t.get("id")) and _num(str(t.get("value", ""))) is not None and text(t.get("statement")) for t in th)
+        isinstance(t, dict) and text(t.get("id")) and threshold_value(t) is not None and text(t.get("statement")) for t in th)
     th_ok = th_ok and len({t["id"] for t in th}) == len(th)
     g.add("Decision thresholds declared", th_ok,
-          "decision_thresholds: [{id, value (number), statement}] for every threshold the decision rule uses (the Stage 5 report "
+          "decision_thresholds: [{id, number (or value), statement}] for every threshold the decision rule uses (the Stage 5 report "
           "must state each one numerically with its id)")
     oh = d.get("owner_holds")
     if oh is None:
@@ -403,6 +406,145 @@ def lock_completeness_checks(g, d, outs):
           "holds [{id, owner_source, statement}]}: a hold comes from an owner decision and the output keeps the rule's action beside it")
 
 
+def threshold_value(t):
+    """A decision threshold's number (case02 change A6: docs say `number`, older gate code read `value`; both are accepted).
+    When both are given they must agree."""
+    if not isinstance(t, dict):
+        return None
+    vals = [_num(str(t[k])) for k in ("number", "value") if k in t and t[k] is not None]
+    if not vals or any(v is None for v in vals) or len(set(vals)) != 1:
+        return None
+    return vals[0]
+
+
+def _tolerance_shape_ok(tol):
+    """The tolerance shape G4a/G4b read: absent, or {fields: [names], absolute_tolerance?, relative_tolerance?,
+    numeric_missingness?}. A bare number is not accepted (case02 lesson A2)."""
+    if tol is None:
+        return True
+    if not isinstance(tol, dict) or not isinstance(tol.get("fields", []), list) or not all(text(f) for f in tol.get("fields", [])):
+        return False
+    for k in ("absolute_tolerance", "relative_tolerance"):
+        v = tol.get(k, 0)
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or v < 0:
+            return False
+    nm = tol.get("numeric_missingness")
+    return nm is None or isinstance(nm, dict)
+
+
+def next_stage_entry_checks(g, root, d):
+    """Case02 change A2 (owner rule: a design is not locked until the next stage's entry gates pass on it). Runs the
+    G4a/G4b shape checks on the locked fixtures now: each worked answer is compared with itself using the fixture's keys
+    and tolerance through the same reconcile.compare that G4a uses, and every tolerance has the shape G4a/G4b read.
+    A blank or duplicated key, a missing key column or a bare-number tolerance fails here instead of at Stage 4."""
+    fx = d.get("fixtures") if isinstance(d.get("fixtures"), list) else []
+    bad = []
+    for f in fx:
+        f = f if isinstance(f, dict) else {}
+        lab = f"fixture {f.get('id')}"
+        tol = f.get("tolerance")
+        if not _tolerance_shape_ok(tol):
+            bad.append(f"{lab}: tolerance must be {{fields: [...], absolute_tolerance, relative_tolerance}}, not {type(tol).__name__}")
+            tol = None
+        wa = f.get("worked_answer")
+        if not ref_current(root, wa):
+            bad.append(f"{lab}: worked answer not current")
+            continue
+        ok, det = reconcile.compare(root, wa, wa, f.get("keys") or [], tol)
+        if not ok:
+            bad.append(f"{lab}: {det.get('error') or 'self-comparison failed'}")
+    rc = d.get("reconciliation")
+    outs = rc.get("outputs") if isinstance(rc, dict) and isinstance(rc.get("outputs"), list) else []
+    for o in outs:
+        o = o if isinstance(o, dict) else {}
+        if not _tolerance_shape_ok(o.get("tolerance")):
+            bad.append(f"output {o.get('name')}: tolerance must be {{fields: [...], ...}}, not {type(o.get('tolerance')).__name__}")
+        keys = o.get("keys")
+        if not (isinstance(keys, list) and keys and all(text(k) for k in keys) and len(set(keys)) == len(keys)):
+            bad.append(f"output {o.get('name')}: keys must be non-blank and unique")
+    g.add("Next-stage entry check (G4a/G4b shape) passes on the locked design", bool(fx) and not bad,
+          "each fixture's worked answer compared with itself by G4a's compare, and every tolerance in G4a/G4b's shape"
+          + (f"; failed: {bad[:6]}" if bad else ""))
+
+
+VERSION_IN_NAME = re.compile(r"_v(\d+)\.[A-Za-z0-9]+$")
+
+
+def _version_number(v):
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, int):
+        return v
+    if not isinstance(v, str):
+        return None
+    m = re.search(r"(?:^|[^A-Za-z0-9])v(\d+)\b", v) or re.search(r"\b(\d+)\b", v)
+    return int(m.group(1)) if m else None
+
+
+def design_version_checks(g, s3):
+    """Case02 change A7: every versioned docs/stage3 file the locked design names (deliverables, stage_records) carries the
+    locked design version; fixture files carry the fixture version when it has a number. Catches a design locked as v04
+    whose deliverables still name the v02 files."""
+    s3 = s3 if isinstance(s3, dict) else {}
+    dv, fv = _version_number(s3.get("design_version")), _version_number(s3.get("fixture_version"))
+    paths = [x for x in s3.get("deliverables", []) if isinstance(x, str)] if isinstance(s3.get("deliverables"), list) else []
+    sr = s3.get("stage_records")
+    paths += [x.get("path") for x in sr if isinstance(x, dict) and isinstance(x.get("path"), str)] if isinstance(sr, list) else []
+    wrong = []
+    for pth in dict.fromkeys(paths):
+        m = VERSION_IN_NAME.search(pth)
+        if not m or not pth.startswith("docs/stage3/"):
+            continue
+        want = fv if "/fixtures/" in pth else dv
+        if want is not None and int(m.group(1)) != want:
+            wrong.append(f"{pth} (expected v{want:02d})")
+    g.add("Locked design names its own version's files", dv is not None and not wrong,
+          f"design_version {s3.get('design_version')!r}" + (f"; wrong version: {wrong[:6]}" if wrong else "; every versioned file matches")
+          + ("" if dv is not None else "; design_version has no version number"))
+
+
+def stale_nested_refs(root, stage):
+    """Case02 change A10. [(send id, attachment, nested path, cited sha256)] for every {path, sha256} reference inside a
+    JSON attachment of a send in artifacts/operations/<stage>.json that no longer matches the current file, and that is
+    not resolved by an H1 historical-send record (artifacts/operations/<stage>.historical.json naming the send, whose
+    supersession record maps the path in superseded_inputs to a current archived copy with the cited hash)."""
+    ops = _plain_at(root, f"artifacts/operations/{stage}.json")
+    sends = ops.get("sends") if isinstance(ops, dict) and isinstance(ops.get("sends"), list) else []
+    hist = _plain_at(root, f"artifacts/operations/{stage}.historical.json")
+    hmap = {}
+    for e in (hist.get("historical_sends") if isinstance(hist, dict) and isinstance(hist.get("historical_sends"), list) else []):
+        if isinstance(e, dict) and ref_current(root, e.get("supersession")):
+            rec = _plain_at(root, e["supersession"]["path"]) or {}
+            named = rec.get("historical_sent_fail") == e.get("send_id") or e.get("send_id") in (rec.get("historical_sends") or [])
+            si = rec.get("superseded_inputs") if isinstance(rec.get("superseded_inputs"), dict) else {}
+            if named:
+                hmap[e.get("send_id")] = si
+    out = []
+    for snd in sends:
+        if not isinstance(snd, dict):
+            continue
+        for att in snd.get("attachments") or []:
+            if not (isinstance(att, dict) and text(att.get("path")) and att["path"].lower().endswith(".json") and ref_current(root, att)):
+                continue
+            obj = _plain_at(root, att["path"])
+            for ref in guards.nested_refs(obj):
+                cited = str(ref.get("sha256")).lower()
+                if ref_current(root, ref):
+                    continue
+                arch = hmap.get(snd.get("id"), {}).get(ref.get("path"))
+                if isinstance(arch, dict) and str(arch.get("sha256", "")).lower() == cited and ref_current(root, arch):
+                    continue
+                out.append((snd.get("id"), att["path"], ref.get("path"), cited))
+    return out
+
+
+def stale_nested_ref_checks(g, root, stage):
+    stale = stale_nested_refs(root, stage)
+    g.add(f"No stale nested references in the {stage} sends", not stale,
+          "every {path, sha256} cited inside a sent JSON attachment is current, or the send is declared historical (H1) with an "
+          "archived copy of the cited bytes" + (f"; stale: {[f'{a} -> {c} ({b})' for a, b, c, _ in stale[:5]]}" if stale else ""))
+
+
 def design_lock_guards(g, rels):
     """Lessons L11/L12 (gates/guards.py): no template placeholder reference anywhere in the design files or the JSON files
     they reference, and no blanket ban on labeled descriptive rates."""
@@ -417,7 +559,7 @@ def design_lock_guards(g, rels):
             continue
         if rel.lower().endswith(".json"):
             obj = _plain(rel, g)
-            body = "\n".join(guards.text_strings(obj)) if obj is not None else body
+            body = "\n".join(guards.text_strings(obj, skip_keys=guards.EXPOSURE_KEYS)) if obj is not None else body
         bans += [f"{rel}: {h}" for h in guards.rate_ban_hits(body)]
     g.add("Descriptive rates not banned", not bans,
           "labeled descriptive (associational) rates and differences are allowed and expected; restrict causal wording "
@@ -669,9 +811,16 @@ def g5(root):
           f"R receipt {sorted(r_dl)}; claims ledger {sorted(p for p in dpaths if text(p))}")
     claim_checks(g, root, c, dpaths)
     finish_content_checks(g, root, dpaths)
-    subj = [CLAIMS] + [pth for pth in dpaths if text(pth)]
-    review_checks(g, "artifacts/stage5/reviews/second_designer_inference.json", "second_designer", subj, "Second Designer inference")
-    review_checks(g, "artifacts/stage5/reviews/risk_reviewer_numbers.json", "risk_reviewer", subj, "Risk Reviewer numbers")
+    ap5 = _plain(FINISH_APPROVAL, g)
+    if ap5 is not None:
+        g.use(FINISH_APPROVAL)
+    comps = companion_checks(g, root, c, approval=ap5)
+    status_word_checks(g, root, [pth for pth in dpaths if text(pth)] + comps)
+    stale_nested_ref_checks(g, root, "finish")
+    subj = [CLAIMS] + [pth for pth in dpaths if text(pth)] + comps
+    review_checks(g, S5_REVIEWS[0], "second_designer", subj, "Second Designer inference")
+    review_checks(g, S5_REVIEWS[1], "risk_reviewer", subj, "Risk Reviewer numbers")
+    stage5_review_shape_checks(g, root)
     repair.cap_checks(g)
     return g.result()
 
@@ -757,7 +906,7 @@ def finish_content_checks(g, root, dpaths):
     for t in th:
         if not isinstance(t, dict):
             continue
-        tid, val = str(t.get("id", "")), _num(str(t.get("value", "")))
+        tid, val = str(t.get("id", "")), threshold_value(t)
         idre = re.compile(r"(?<![\w-])" + re.escape(tid) + r"(?![\w-])")
         if not any(idre.search(ln) and val in numbers_in(ln) for _, ln in lines):
             missing.append(tid)
@@ -787,6 +936,153 @@ def finish_content_checks(g, root, dpaths):
           + (f"; rule action not reported beside the hold: {bad}" if bad else ""))
 
 
+S5_REVIEWS = ("artifacts/stage5/reviews/second_designer_inference.json", "artifacts/stage5/reviews/risk_reviewer_numbers.json")
+G4C_REVIEW = "artifacts/stage4/reviews/risk_reviewer_g4c.json"
+COMPANION_IN_APPROVAL = re.compile(r"\bcompanion\s+(?:file\s+)?(\S+?)\s+sha256[ =:]*([0-9a-fA-F]{64})\b")
+
+
+def declared_companions(c, approval):
+    """Companion files of the finish package (case02 change A5): `companions: [{path, sha256}]` in the claims ledger or the
+    owner finish approval, or a `companion <path> sha256 <hash>` phrase in the approval text. Returns {path: sha256}."""
+    out = {}
+    for src in (c, approval):
+        cs = src.get("companions") if isinstance(src, dict) else None
+        for x in cs if isinstance(cs, list) else []:
+            if isinstance(x, dict) and text(x.get("path")):
+                out.setdefault(x["path"], str(x.get("sha256", "")).lower())
+    at = approval.get("approval_text") if isinstance(approval, dict) else None
+    for m in COMPANION_IN_APPROVAL.finditer(at or ""):
+        out.setdefault(m.group(1).rstrip(";,."), m.group(2).lower())
+    return out
+
+
+def companion_checks(g, root, c, approval):
+    """Every declared companion is current at its declared hash and every source declares the same hash. Returns the paths,
+    which G5 adds to the review subjects of both Stage 5 reviews and to the status-word check."""
+    comps = declared_companions(c, approval)
+    srcs = []
+    for src in (c, approval):
+        cs = src.get("companions") if isinstance(src, dict) and isinstance(src.get("companions"), list) else []
+        srcs.append({x.get("path"): str(x.get("sha256", "")).lower() for x in cs if isinstance(x, dict)})
+    at = approval.get("approval_text") if isinstance(approval, dict) else None
+    srcs.append({m.group(1).rstrip(";,."): m.group(2).lower() for m in COMPANION_IN_APPROVAL.finditer(at or "")})
+    clash = sorted({p for s in srcs for p in s if any(p in t and t[p] != s[p] for t in srcs)})
+    stale = [p for p, h in comps.items() if not ref_current(root, {"path": p, "sha256": h})]
+    for p in comps:
+        if not stale or p not in stale:
+            g.use(p)
+    g.add("Companion files current", not stale and not clash,
+          ("no companion declared" if not comps else f"companions {sorted(comps)}")
+          + (f"; not current: {stale}" if stale else "") + (f"; declared with different hashes: {clash}" if clash else ""))
+    return sorted(comps)
+
+
+ID_TOKEN = r"(?:[A-Z][A-Z0-9]*-[A-Z0-9]*\d+|-\d+)"
+STATUS_CLAIM_RE = re.compile(r"(?P<ids>" + ID_TOKEN + r"(?:\s*(?:,|and|&|or|,\s*and)\s*" + ID_TOKEN + r")*)\s+"
+                             r"(?:(?:is|are|was|were|has\s+been|have\s+been|now|marked|listed|recorded|treated|as)\s+){0,3}"
+                             r"(?P<word>resolved|closed|fixed)\b", re.IGNORECASE)
+NEGATED_RE = re.compile(r"\b(?:not|never|un)\s*(?:yet\s+)?$", re.IGNORECASE)
+CARRY_NEG_RE = re.compile(r"\b(?:does\s+not|do\s+not|not)\s+carr|\bomit|\bleaves?\s+out\b", re.IGNORECASE)
+
+
+def _expand_ids(chunk):
+    ids, prefix = [], None
+    for tok in re.findall(ID_TOKEN, chunk):
+        if tok.startswith("-"):
+            if prefix:
+                ids.append(prefix + tok[1:].zfill(2) if len(tok) <= 3 else prefix + tok[1:])
+        else:
+            ids.append(tok)
+            prefix = tok.rsplit("-", 1)[0] + "-"
+    return ids
+
+
+def status_claims(body):
+    """[(finding id, word, sentence)] where text calls a finding resolved, closed or fixed (e.g. "marks G4C-02, -04 and -07 as
+    resolved"; "G4C-11 is closed"). A negated statement ("is not resolved") is not a claim."""
+    out = []
+    for sent in re.split(r"(?<=[.;!?])\s+|\n+", body or ""):
+        for m in STATUS_CLAIM_RE.finditer(sent):
+            between = sent[m.end("ids"):m.start("word")]
+            if re.search(r"\bnot\b|\bnever\b|\byet\b", between, re.IGNORECASE):
+                continue
+            ids = _expand_ids(m.group("ids"))
+            if re.match(r"\s*(?:is|was|has\s+been)\b", between, re.IGNORECASE):
+                ids = ids[-1:]  # singular verb: only the last id is the subject ("..., and G4C-11 is closed")
+            for fid in ids:
+                out.append((fid, m.group("word").lower(), sent.strip()[:200]))
+    return out
+
+
+def status_word_checks(g, root, rels):
+    """Case02 change A5. (1) A deliverable or companion that calls a G4c finding resolved/closed/fixed must agree with the
+    sealed G4c review, where that finding must be closed. (2) Every finding the Stage 4 methodology triage disposes of as
+    carried to the Stage 5 disclosures must be carried: named in a deliverable or companion on a line that does not say it
+    is not carried."""
+    rv = _plain_at(root, G4C_REVIEW)
+    fnd = rv.get("findings") if isinstance(rv, dict) and isinstance(rv.get("findings"), list) else []
+    status = {f.get("id"): f.get("status") for f in fnd if isinstance(f, dict) and text(f.get("id"))}
+    if not status:
+        g.add("Finding status words match the G4c review", True, "no G4c review findings to compare")
+        return
+    g.use(G4C_REVIEW)
+    bodies = {r: _read_text(root, r) or "" for r in rels}
+    wrong = [f"{r}: {fid} called {w} but open in the G4c review" for r, b in bodies.items() for fid, w, _ in status_claims(b)
+             if status.get(fid) == "open"]
+    g.add("Finding status words match the G4c review", not wrong,
+          "a statement that a review finding is resolved/closed/fixed must match that finding's status in "
+          f"{G4C_REVIEW}" + (f"; mismatch: {wrong[:5]}" if wrong else ""))
+    s4 = _plain_at(root, R_STEP["G4d"][1]) or {}
+    mref = (s4.get("evidence_receipts") or {}).get("methodology") if isinstance(s4.get("evidence_receipts"), dict) else None
+    meth = _plain_at(root, mref["path"]) if ref_current(root, mref) else None
+    tri = meth.get("triage") if isinstance(meth, dict) and isinstance(meth.get("triage"), list) else []
+    carried = [t.get("id") for t in tri if isinstance(t, dict) and t.get("id") in status
+               and re.search(r"carried|disclos", str(t.get("disposition", "")), re.IGNORECASE)]
+    lines = [ln for b in bodies.values() for ln in b.splitlines()]
+    not_carried = []
+    for fid in carried:
+        idre = re.compile(r"(?<![\w-])" + re.escape(fid) + r"(?![\w-])")
+        if not any(idre.search(ln) and not _id_in_negated_carry(ln, fid) for ln in lines):
+            not_carried.append(fid)
+    if tri:
+        g.use(mref["path"])
+    g.add("Triage 'carried' findings carried in the report", not not_carried,
+          ("no triage receipt" if not tri else f"{len(carried)} G4c findings the triage carries to Stage 5")
+          + (f"; triage says carried but no deliverable or companion carries: {not_carried}" if not_carried else ""))
+
+
+def _id_in_negated_carry(line, fid):
+    """True when `fid` sits in the part of the line after a "does not carry" style phrase (up to the next ; or .)."""
+    for m in CARRY_NEG_RE.finditer(line):
+        tail = re.split(r"[;.]", line[m.end():], maxsplit=1)[0]
+        if re.search(r"(?<![\w-])" + re.escape(fid) + r"(?![\w-])", tail):
+            return True
+    return False
+
+
+def stage5_review_shape_checks(g, root):
+    """Case02 change A9: `uncovered_claims` is a list of claim ids ([] when none, never a note such as "nothing uncovered"),
+    and the two Stage 5 reviews use different finding ids (role prefixes SD5-, RR5- and X5- for cross review)."""
+    c = _plain_at(root, CLAIMS) or {}
+    cids = {x.get("id") for x in c.get("claims", []) if isinstance(x, dict)} if isinstance(c.get("claims"), list) else set()
+    bad, ids = [], {}
+    for rel in S5_REVIEWS:
+        rv = _plain_at(root, rel)
+        if not isinstance(rv, dict):
+            continue
+        uc = rv.get("uncovered_claims", [])
+        if not (isinstance(uc, list) and all(isinstance(u, str) and u in cids for u in uc)):
+            bad.append(f"{rel}: uncovered_claims {uc!r}")
+        for f in rv.get("findings", []) if isinstance(rv.get("findings"), list) else []:
+            if isinstance(f, dict) and text(f.get("id")):
+                ids.setdefault(f["id"], set()).add(rel)
+    g.add("Stage 5 uncovered_claims are claim ids", not bad,
+          "uncovered_claims: [] or a list of claim ids from the ledger; no notes" + (f"; bad: {bad}" if bad else ""))
+    clash = sorted(i for i, rs in ids.items() if len(rs) > 1)
+    g.add("Stage 5 finding ids distinct across reviews", not clash,
+          "each review prefixes its finding ids by role (SD5-, RR5-; X5- for cross review)" + (f"; used by both: {clash[:8]}" if clash else ""))
+
+
 def g5p(root, ledger=CLAIMS):
     """G5P: the G5 claim and content checks on any claims ledger (e.g. a child's reply before placement). Writes nothing unless run
     through gates.run with a record; no R, review or G4d checks. A clean G5P means these G5 checks will pass on the placed ledger."""
@@ -799,6 +1095,9 @@ def g5p(root, ledger=CLAIMS):
           "deliverables: [{path, sha256}] current, no duplicates")
     claim_checks(g, root, c, dpaths)
     finish_content_checks(g, root, dpaths)
+    comps = companion_checks(g, root, c, approval=None)
+    status_word_checks(g, root, [pth for pth in dpaths if text(pth)] + comps)
+    stale_nested_ref_checks(g, root, "finish")
     return g.result()
 
 

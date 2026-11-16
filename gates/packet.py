@@ -1,8 +1,8 @@
 """G0 packet integrity (docs/gates.md, docs/handoff.md).
 
 Input: artifacts/packets/index.json
-  {"packets": [{"id", "path", "status": "draft"|"sent"|"answered", "sha256" (required once sent),
-                "reply": {"path", "sha256"} (required once answered)}],
+  {"packets": [{"id", "path", "status": "draft"|"sent"|"captured"|"answered", "sha256" (required once sent),
+                "reply": {"path", "sha256"} (required once captured or answered)}],
    "forbidden_strings": [text that must never appear in a packet, e.g. a private folder name] (optional),
    "forbidden_path_prefixes": [project-relative prefixes no input may come from] (optional; "private/" always applies)}
 
@@ -26,6 +26,11 @@ Checks every packet in the index:
 - no input is a JSON file holding template placeholder references (all-zero or NOT_SET hashes, or a template
   `*.example.json`): R `finalize` walks every referenced JSON file and would fail on them (gates/guards.py);
 - every `MISSING INPUT: <item>` line in a sealed reply was checked against the public files (gates/derivability.py).
+
+Captured replies (case02 change A4): a tool that saves a child's reply records the packet as "captured", never straight
+as "answered". G0 runs every reply and derivability check on a captured packet but still lists it as unanswered (and in
+`captured`), so G6 and a stage close refuse it. Only `python3 -m gates.packet promote <root> <packet id>` moves it to
+"answered", and only when G0 passes; on a FAIL the packet stays captured and the command exits 1.
 """
 from __future__ import annotations
 
@@ -43,7 +48,7 @@ OPTIONAL = ["SUPERSEDES"]
 STAGES = {"1", "2", "2F", "3", "4", "5"}
 ROLES = {"lead-designer", "second-designer", "risk-reviewer", "sql-analyst", "analyst-r-a", "analyst-r-b"}
 DEFAULT_FORBIDDEN_PREFIXES = ["private/"]
-STATUSES = ("draft", "sent", "answered")
+STATUSES = ("draft", "sent", "captured", "answered")
 
 FIELD_RE = re.compile(r"^(" + "|".join(re.escape(f) for f in sorted(FIELDS + OPTIONAL, key=len, reverse=True)) + r"):[ \t]*(.*)$")
 INPUT_RE = re.compile(r"^\s*-\s+(?P<path>\S+)\s+sha256=(?P<sha>[0-9A-Fa-f]{64})\s+bytes=(?P<bytes>[0-9]+)"
@@ -112,7 +117,7 @@ def g0(root):
     fs = [s for s in fs if text(s)] if isinstance(fs, list) else []
     fp = idx.get("forbidden_path_prefixes", [])
     fp = DEFAULT_FORBIDDEN_PREFIXES + ([s for s in fp if text(s)] if isinstance(fp, list) else [])
-    unanswered, superseded = [], []
+    unanswered, superseded, captured = [], [], []
     by_id = {p.get("id"): p for p in pk if isinstance(p, dict)}
     for p in pk:
         if not isinstance(p, dict):
@@ -124,10 +129,13 @@ def g0(root):
         _check_packet(g, root, p, set(ids), fs, fp)
         if p.get("status") != "answered":
             unanswered.append(p.get("id"))
+        if p.get("status") == "captured":
+            captured.append(p.get("id"))
     derivability_checks(g, root, raised_in_replies(root, [p for p in pk if isinstance(p, dict)]), forbidden_prefixes=tuple(fp),
                         prefix="Derivability: ")
     g.extra["unanswered"] = unanswered
     g.extra["superseded"] = superseded
+    g.extra["captured"] = captured
     return g.result()
 
 
@@ -156,7 +164,7 @@ def _check_superseded(g, root, p, by_id):
           "superseded_at: ISO timestamp with zone, e.g. 2026-11-10T18:10:59-06:00")
     rel = p.get("path")
     full = safe_rel(root, rel) if text(rel) else None
-    if p.get("status") in ("sent", "answered"):
+    if p.get("status") in ("sent", "captured", "answered"):
         ok = full is not None and os.path.isfile(full) and ref_current(root, {"path": rel, "sha256": p.get("sha256")})
         g.add(f"{lab} sealed hash current (superseded)", ok, "a superseded packet that was sent stays sealed: history is kept, not rewritten")
         if ok:
@@ -174,7 +182,7 @@ def _check_packet(g, root, p, all_ids, forbidden_strings, forbidden_prefixes):
         g.add(f"{lab} file present", False, f"{rel!r}: safe, existing, non-empty project path required")
         return
     g.use(rel)
-    if status in ("sent", "answered"):
+    if status in ("sent", "captured", "answered"):
         g.add(f"{lab} sealed hash current", ref_current(root, {"path": rel, "sha256": p.get("sha256")}),
               "a sent packet is sealed: its recorded sha256 must equal the current bytes")
     try:
@@ -240,7 +248,7 @@ def _check_packet(g, root, p, all_ids, forbidden_strings, forbidden_prefixes):
     if vm and int(vm.group(1)) >= 2:
         sup = (f.get("SUPERSEDES") or [""])[0].strip()
         g.add(f"{lab} names what it supersedes", text(sup) and sup in all_ids and sup != pid, "SUPERSEDES: <earlier packet id in the index>")
-    if status == "answered":
+    if status in ("captured", "answered"):
         _check_reply(g, root, p, pid, lab, expected)
 
 
@@ -266,3 +274,48 @@ def _check_reply(g, root, p, pid, lab, expected):
     for x in produced:
         if not absent and safe_rel(root, x):
             g.use(x)
+
+
+def promote(root, packet_id):
+    """Move one captured packet to "answered", only if G0 passes with it captured. Returns (exit code, message).
+
+    The index is rewritten only on PASS. G0 is then run again on the promoted index and must still pass."""
+    from gates.common import load_json_strict, write_json_atomic
+    full = os.path.join(root, INDEX)
+    idx, err = load_json_strict(full)
+    if err or not isinstance(idx, dict) or not isinstance(idx.get("packets"), list):
+        return 2, f"{INDEX}: {err or 'packets list missing'}"
+    hit = [p for p in idx["packets"] if isinstance(p, dict) and p.get("id") == packet_id]
+    if len(hit) != 1:
+        return 2, f"{packet_id}: not found once in {INDEX}"
+    if hit[0].get("status") != "captured":
+        return 1, f"{packet_id}: status is {hit[0].get('status')!r}; only a captured packet can be promoted"
+    rec = g0(root)
+    if rec["result"] != "PASS":
+        bad = [c["check"] for c in rec["checks"] if c["result"] != "PASS"]
+        return 1, f"{packet_id} stays captured: G0 FAIL on {bad}"
+    hit[0]["status"] = "answered"
+    write_json_atomic(idx, full)
+    rec2 = g0(root)
+    if rec2["result"] != "PASS":
+        hit[0]["status"] = "captured"
+        write_json_atomic(idx, full)
+        bad = [c["check"] for c in rec2["checks"] if c["result"] != "PASS"]
+        return 1, f"{packet_id} put back to captured: G0 FAIL after promotion on {bad}"
+    return 0, f"{packet_id} promoted to answered; G0 PASS"
+
+
+def main(argv=None):
+    import sys
+    a = list(sys.argv[1:] if argv is None else argv)
+    if len(a) != 3 or a[0] != "promote":
+        print("usage: python3 -m gates.packet promote <project_root> <packet id>")
+        return 2
+    code, msg = promote(a[1], a[2])
+    print(msg)
+    return code
+
+
+if __name__ == "__main__":
+    import sys
+    sys.exit(main())

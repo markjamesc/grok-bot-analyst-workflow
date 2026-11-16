@@ -25,6 +25,13 @@
 23. **Thresholds are stated as numbers.** The final report states every decision threshold numerically, with its design id (`decision_thresholds` in the Grok design, declared at G3 and checked at G5).
 24. **Owner holds are disclosed, never withholding.** An owner hold or stop test (for example a stop test the owner set at Stage 5) stays in force and is disclosed. It never withholds the action the stated rule decides: the decision output keeps the rule's action and the hold side by side, and the report gives the rule's action with the hold put to the owner on the same line. The hold still waits for the owner; only how it is reported changes. G3 checks the hold is declared with its owner source; G5 checks the report.
 
+25. **A FAIL is never sealed as closed.** Every tool step that runs a gate exits non-zero on FAIL. A stage is closed and sealed only after `python3 -m gates.close <closing gate> <root>` exits 0: the closing gate and every gate it depends on (and G0) are PASS with current inputs, and no packet is sent but unanswered or captured but not promoted.
+26. **A reply is captured, then promoted.** The step that saves a child's reply records the packet as `captured`. Only `python3 -m gates.packet promote <root> <id>` marks it `answered`, and only after G0 passes; on a FAIL it stays captured and nothing later may seal it.
+27. **Check the next stage's entry gates before a design is locked** (owner rule, case02). G3 runs the G4a/G4b shape checks on the locked fixtures and the version check on the locked design's files, so a shape fault is found at lock and not at Stage 4.
+28. **Companions and finding status are checked.** Every companion file of the finish package is declared and reviewed by both Stage 5 reviewers. A statement that a review finding is resolved, closed or fixed must match the sealed review, and a finding the Stage 4 triage disposes of as carried to Stage 5 must be carried in the report or a companion (G5P, G5).
+29. **Stage 5 review records.** `uncovered_claims` is `[]` or a list of claim ids, never a note. Finding ids carry the role (SD5- Second Designer, RR5- Risk Reviewer, X5- cross review) so the two reviews never share an id (G5).
+30. **Old ledger citations need an H1 record.** When the claims ledger is replaced after a reviewer cited it, the step that archives the old ledger also writes the H1 historical-send record. G5P and G5 fail a stale nested reference that no H1 record resolves.
+
 ## Run cap (head-to-head test)
 
 One attempt per version on Case B. Maximum of 3 repair rounds. Stop and report after about a day of work per side. If a side is blocked, wait and retry up to 3 times, then report.

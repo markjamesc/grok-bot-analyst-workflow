@@ -249,8 +249,11 @@ def claims_ledger(root, claims=None):
 def add_stage5(root, claims=None):
     claims_ledger(root, claims)
     subj = ["artifacts/stage5_claims.json"] + list(DELIVERABLES)
-    review(root, "artifacts/stage5/reviews/second_designer_inference.json", "second_designer", subj)
-    review(root, "artifacts/stage5/reviews/risk_reviewer_numbers.json", "risk_reviewer", subj)
+    # Role-prefixed finding ids (case02 change A9): the two Stage 5 reviews never share a finding id.
+    review(root, "artifacts/stage5/reviews/second_designer_inference.json", "second_designer", subj,
+           [{"id": "SD5-01", "class": "advisory", "status": "open"}])
+    review(root, "artifacts/stage5/reviews/risk_reviewer_numbers.json", "risk_reviewer", subj,
+           [{"id": "RR5-01", "class": "advisory", "status": "open"}])
 
 
 def approve_finish(root, text="Approved: finish package as listed"):

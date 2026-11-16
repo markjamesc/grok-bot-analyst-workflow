@@ -2,7 +2,7 @@
 
 **Purpose.** Checks framing, red-teams the design, reviews SQL source gates and post-reconciliation evidence, and audits every number at Stage 5.
 
-**Active in.** Stages 2, 3, 4, and 5.
+**Active in.** Stages 1 (red team of the Stage 1 decision document, under the owner-approved mapping in docs/stages.md, "Stage 1 reviews"), 2, 3, 4, and 5.
 
 ## Instructions
 
@@ -17,6 +17,8 @@
 - At Stage 5, read the G5P precheck log in your packet first, then audit every number. Say for each failing precheck check whether it is a real defect or a tool limit.
 - At G4c, review the builder corrections log (`artifacts/stage4/corrections.json`) when present: each correction's reason, author and hashes.
 - Flag a report path change whose claims still name the old path, a threshold stated only in words, and a corrected disclosure not swept through every field that repeats it.
+- At Stage 5, compare every "resolved", "closed" or "fixed" statement about a review finding with that finding's status in the sealed review JSON, and audit every companion file listed in your packet as well as the report.
+- In a Stage 5 review record, prefix finding ids with `RR5-`, and write `"uncovered_claims": []` when every claim is covered (claim ids only, never a note).
 
 ## Inputs
 - Stage 2: the Lead Designer's framing, whole, with its hash; then the G2F feasibility result
@@ -25,6 +27,7 @@
 - Stage 5: sealed Stage 4 results and the Stage 5 draft
 
 ## Outputs
+- Stage 1: a red team of the Stage 1 decision document
 - Stage 2: a framing check, alongside the Second Designer's critique; a review of G2F feasibility
 - Stage 3: a design red-team (measurement risks, missing values, duplicates, zero denominators, time zones, grain); a review of each SQL source gate (does it test extraction completeness, keys, joins, and counts as the design expects?); G3K findings as requested
 - Stage 4: a post-reconciliation evidence review

@@ -2,6 +2,21 @@
 
 All notable changes to this design draft are recorded here. Dates are America/Chicago.
 
+## 0.4.0 — 2026-11-16
+
+Process changes from the fourth head-to-head case (no case content or answers). Lessons L21–L27 in docs/lessons.md.
+
+- **Stage close check (new, `gates/close.py`).** `python3 -m gates.close <closing gate> <root>` exits 0 only if the closing gate, every gate it depends on and G0 are PASS with current inputs, and no packet is sent but unanswered or captured but not promoted. A FAIL can no longer be sealed as closed. Standing rule 25.
+- **Captured replies (G0).** New packet status `captured`: every reply and derivability check runs, but the packet stays unanswered (and is listed in `captured`) until `python3 -m gates.packet promote <root> <id>` moves it to `answered` on a G0 PASS. Standing rule 26.
+- **Next stage's entry check at lock (G3).** Each fixture's worked answer is compared with itself by the G4a compare, every tolerance must have the G4a/G4b shape (no bare number), and output keys must be non-blank. Standing rule 27.
+- **Design version check (G3).** Versioned docs/stage3 files named by the locked design (deliverables, stage_records) must carry the design version (fixtures: the fixture version).
+- **Derivability.** `MISSING INPUT: none.` (any case, with or without a full stop) is not a missing input.
+- **Stage 5 companions and status words (G5P, G5).** Companion files (declared in the ledger or approval `companions`, or `companion <path> sha256 <hash>` in the approval text) must be current and are review subjects of both Stage 5 reviews. A report or companion that calls an open G4c finding resolved/closed/fixed fails, and every finding the Stage 4 triage disposes of as carried must be carried. Standing rule 28.
+- **Stage 5 review records (G5).** `uncovered_claims` is `[]` or claim ids; the two reviews may not share a finding id (role prefixes SD5-, RR5-, X5-). Standing rule 29.
+- **Stale nested references (G3, G5P, G5).** A `{path, sha256}` inside a sent JSON attachment that no longer matches must be resolved by an H1 historical-send record with an archived copy. Standing rule 30.
+- **Docs and code agree.** Thresholds accept `number` or `value` (both must agree when given); exposure sentences ("has been computed or seen") and `methodology.exposure` / `results_seen` are not read as rate bans; the owner_holds shape is in the Lead Designer role; the Stage 1 review mapping and the real Stage 5 order are in docs/stages.md, docs/gates.md and the reviewer roles.
+- Tests: `gates/tests/test_case03_changes.py` (47 tests). The base fixture's Stage 5 reviews now use role-prefixed ids.
+
 ## 0.3.0 — 2026-11-15
 
 Process changes from the third head-to-head case (no case content or answers). Lessons L14–L20 in docs/lessons.md.
