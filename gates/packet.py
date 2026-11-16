@@ -213,6 +213,10 @@ def _check_packet(g, root, p, all_ids, forbidden_strings, forbidden_prefixes):
     incomplete = [f"{d or '.'}: parts {sorted(ks)} of {K}" for (d, K), ks in parts.items() if ks != set(range(1, K + 1))]
     g.add(f"{lab} split inputs complete", not incomplete, f"missing parts: {incomplete}" if incomplete else "ok")
     g.add(f"{lab} no forbidden inputs", not forbidden, f"forbidden: {forbidden}" if forbidden else f"prefixes {forbidden_prefixes}")
+    if (f.get("STAGE") or [""])[0].strip().upper() == "5" and _norm_role((f.get("ROLE") or [""])[0]) in ("second-designer", "risk-reviewer"):
+        ips = [m.group("path") for m in (INPUT_RE.match(x) for x in in_lines) if m]
+        g.add(f"{lab} Stage 5 review carries a precheck log", any("precheck" in os.path.basename(x).lower() for x in ips),
+              "a Stage 5 review packet lists the latest G5P precheck log of the ledger it reviews as an input (case02 change 2)")
     tph = guards.placeholder_refs(root, [m.group("path") for m in (INPUT_RE.match(x) for x in in_lines) if m])
     g.add(f"{lab} no template placeholder references", not tph,
           (guards.describe(tph) + " -- " + guards.TEMPLATE_HINT) if tph else "none")

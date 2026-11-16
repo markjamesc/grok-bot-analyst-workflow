@@ -13,6 +13,11 @@
 - End every reply with a `PRODUCED FILES:` line followed by one `- <path>` line per file you wrote (never blank), and make the last line `ANSWERED <PACKET_ID>`.
 - Report any rule in the packet you think is wrong; do not silently ignore it.
 - In the first Stage 2 framing, state the capacity rule explicitly (including whether an option may be taken at a loss when capacity binds) and the decision unit (pooled or per site/segment). Do not leave either for a repair round to settle.
+- In the Stage 3 Grok design, declare every decision threshold under `decision_thresholds` (id, number, statement), and any owner hold under `owner_holds` with its owner source and a decision output that keeps the rule's action beside the hold (G3).
+- In the Stage 5 report, state every decision threshold as a number with its design id on the same line (G5).
+- If an owner hold or stop test is triggered, report the action the stated rule decides and, on the same line, the hold id and that it is put to the owner. Never drop the hold and never let it replace the rule's action.
+- A disclosure states what the sealed record says (quote or cite it). When you correct a disclosure, update every ledger field that repeats it (claims, quotes, notes, deliverables) in the same revision.
+- When a revision moves a report to a new path, update the `deliverable` field of every claim that quotes it, not only the deliverables list (G5P/G5).
 
 ## Inputs
 - Owner request (Stage 1)

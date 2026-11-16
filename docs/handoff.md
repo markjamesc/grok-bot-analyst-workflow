@@ -70,3 +70,9 @@ MISSING INPUT: <item>
 
 ## Stage 4 packets for the Risk Reviewer
 - After the parent reconciles R-A, R-B, and SQL (G4b), send the reconciliation report and the reconciled evidence for the G4c review. Name the output paths in the packet.
+
+## Case02 additions
+- **Stage 5 review packets** list the latest G5P precheck log of the ledger under review as an input (G0 fails a Stage 5 Second Designer or Risk Reviewer packet without one). A reviewer reads the precheck first and says whether each failing check is a real defect or a tool limit.
+- **Revision briefs that change a report path** say, in the brief: "update the `deliverable` field of every claim that quotes the moved report, not only the deliverables list". G5P catches a miss before placement.
+- **Builders' corrections** before send are logged in `artifacts/stage4/corrections.json`; the brief never asks the parent to unlock or re-freeze a builder's file, and the parent never writes the extract.
+- **Owner decisions** in a packet or brief are stated plain-language first (what is being decided, the options, what each does), then the technical detail.

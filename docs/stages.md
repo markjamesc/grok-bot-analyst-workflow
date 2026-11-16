@@ -8,8 +8,8 @@ Each step is: parent packs → child works → parent captures and seals → gat
 | 2 Framing | Lead Designer | Second Designer, Risk Reviewer | G2 question lock | Approve the locked question |
 | 2→3 Feasibility | SQL Analyst | Risk Reviewer | G2F feasibility | Only on `partly` / `no` |
 | 3 Design | Lead Designer; SQL Analyst (source gates) | Second Designer (independent design, then compare), Risk Reviewer (red-team and source-gate review) | G3S SQL source gates, G3K early key/count checks, G3 design lock | Approve the exact design hash |
-| 4 Execution | R-A, R-B, SQL Analyst | Risk Reviewer (post-reconciliation evidence) | G4a fixtures, G4b reconciliation, G4c post-reconciliation review, G4d release | Only after 3 failed repairs or a changed decision |
-| 5 Finish | Lead Designer | Second Designer (inference), Risk Reviewer (numbers) | G5 claims, G6 certificate | Approve the exact finish package hashes (after G5, before G6) |
+| 4 Execution | R-A, R-B, SQL Analyst (also writes the extract) | Risk Reviewer (post-reconciliation evidence) | G4a fixtures, G4b reconciliation, G4c post-reconciliation review, G4d release | Only after 3 failed repairs or a changed decision |
+| 5 Finish | Lead Designer | Second Designer (inference), Risk Reviewer (numbers) | G5P precheck (before each review and placement), G5 claims, G6 certificate | Approve the exact finish package hashes (after G5, before G6) |
 | Score | Scorer outside live roles (earlier ChatGPT key preparer) | — | — | — |
 
 ## Notes
@@ -19,6 +19,10 @@ Each step is: parent packs → child works → parent captures and seals → gat
 - After a repair of a reviewed file (for example a Stage 2 framing repair), the current version goes back to the required reviewers before the gate. G2, G3 and G5 fail a review of a superseded file.
 - The first Stage 2 framing states the capacity rule (including whether an option may be taken at a loss) and the decision unit (pooled or per site/segment) explicitly.
 - Stage 5 order: Lead Designer write-up and claims ledger → Second Designer inference review and Risk Reviewer number audit → G5 → owner approves the exact finish package hashes → R Procedure Gate `finalize` → G6 certificate. G4d never overwrites a Workflow Gate report the R Procedure Gate has recorded.
+- **Stage 3 lock completeness.** The locked design carries every field the R Workflow Gate reads at G4d, and the Grok design declares `decision_thresholds` (id, number, statement) and any `owner_holds` (owner source, and a decision output that records the rule's action and the hold). G3 checks all of them.
+- **Stage 4 extract and corrections.** The SQL Analyst writes the extract; the parent never writes it. A builder that must correct its own file before send logs it in `artifacts/stage4/corrections.json` (old and new hash, role, reason, time); the Risk Reviewer reviews that log at G4c. No unlock and re-freeze.
+- **Stage 5 precheck.** Each Stage 5 ledger is prechecked with G5P before it goes to review and again before placement; the latest precheck log goes into every Stage 5 review packet. A revision brief that changes a report path asks for each claim's `deliverable` to be updated.
+- **Stage 5 report content.** Every decision threshold appears as a number with its design id. A triggered owner hold is reported beside the action the rule decides (rule action + hold id on one line), and is put to the owner; the hold is never dropped and never replaces the rule's action. Disclosures say what the record says, and a corrected disclosure is swept through every ledger field that repeats it.
 - Stages 1–2 never see data values. Feasibility sees structure and quality only, not values or the answer key, and cannot add or reshape questions.
 - Stage 1 has no Second Designer role. The Lead Designer writes the Stage 1 decision document. The parent pins the workflow and checks it at the start gate G1.
 - At Stage 2, the Second Designer critiques the Lead Designer's framing and the Risk Reviewer checks that framing alongside it. The Risk Reviewer also reviews G2F feasibility.

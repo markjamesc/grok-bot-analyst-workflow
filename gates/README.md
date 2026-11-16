@@ -22,6 +22,7 @@ and on the gate fixtures.
 | G4c Post-reconciliation review | Implemented, tested | `stage_gates.g4c` | none (no R equivalent) | good path + 3 faults |
 | G4d Release | Implemented, tested | `stage_gates.g4d` | R `complete execution` checks + the whole ported R Workflow Gate | good path + 6 faults + R-report kept |
 | G5 Claims | Implemented, tested | `stage_gates.g5` | R `complete finish` checks (validate_stage_receipt incl. m_finish claim ledger and m_ai, operations ledger, closure) | good path + 12 faults; R stage-check parity |
+| G5P Stage 5 precheck | Implemented, tested | `stage_gates.g5p` | none (runs exactly the G5 claim and content checks; no R or review checks) | mirror test + unplaced-ledger, CSV, path, threshold and hold tests (`test_case02_changes.py`) |
 | G6 Certificate | Implemented, tested | `stage_gates.g6` | requires the R `finalize` certificate (ported in `procedure.py`) and re-checks every hash it recorded | good path + 10 faults; R vs Python `finalize` verdict parity |
 | GP Assembly regression | Implemented, tested | `gp_assembly`, `assembly` | none | 16 assembly + 6 GP tests |
 | Repair cap (3, then ESCALATE) | Implemented, tested | `repair` | — | in G3K/G4d tests |
@@ -32,6 +33,7 @@ and on the gate fixtures.
 
 ```
 python3 -m gates.run <GATE_ID> <project_root>        # exit 0 PASS, 1 FAIL, 2 TOOL_ERROR; writes artifacts/gates/<ID>.json
+python3 -m gates.run G5P <project_root> --ledger=<claims json>   # precheck any ledger before review or placement
 python3 -m gates.workflow_gate <project_root> [--dry-run]
 GATES_FRAMEWORK_ROOT=<R repo> python3 -m gates.procedure start|begin|complete|status|finalize|amend|successor <root> ...
 python3 -m gates.assembly <project_root> <split.json> [--report-only]
@@ -130,3 +132,17 @@ re-checks every lower record directly.
 The R-equivalent checks inside G1, G2, G3 and G4d require the R receipts and operations ledgers with their existing
 field names (for example `ai2_independent_reconstruction`, `ai3_independent_red_team`) and the R Stage 4 evidence layout.
 Grok runs must produce those files, or the owner must approve a Grok-specific mapping. Weakening them is not allowed.
+
+## Case02 changes (0.3.0)
+
+- **G3** also checks: every Stage 3 field the R Workflow Gate reads at G4d is present in the locked design
+  (`workflow_gate_field_gaps`); `decision_thresholds` [{id, value, statement}] in the Grok design; any `owner_holds`
+  {decision_output {output, impl?, final_action_field, rule_action_fields[], hold_values[]}, holds [{id, owner_source, statement}]}.
+- **G4c** also checks `artifacts/stage4/corrections.json` when present (each entry: id, path of the new version, optional old_path, old_sha256, new_sha256 = current
+  file, author_role, reason, logged_at) and adds the log to the review subjects. No file: PASS "no corrections logged".
+- **G5** reads CSV/TSV evidence cell by cell (`evidence_numbers`), checks each claim's `deliverable` is in the ledger, that every
+  decision threshold appears as its number and id on one deliverable line, and that every row whose final action is a hold value
+  is reported on one line with the rule's action values and a hold id. The hold itself is not removed or overridden.
+- **G5P** = the same claim and content checks (`claim_checks`, `finish_content_checks`) on any ledger; used before each Stage 5
+  review packet and before placement. **G0** fails a Stage 5 Second Designer or Risk Reviewer packet without a precheck log input.
+

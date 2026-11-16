@@ -2,6 +2,18 @@
 
 All notable changes to this design draft are recorded here. Dates are America/Chicago.
 
+## 0.3.0 — 2026-11-15
+
+Process changes from the third head-to-head case (no case content or answers). Lessons L14–L20 in docs/lessons.md.
+
+- **G3 lock completeness.** G3 fails a locked design missing any Stage 3 field the R Workflow Gate reads at G4d (`ml_mode`, `fixture_version`, `fixture_ids`, `reconciliation_critical_fields`, `ranking_contract` under a hard attention budget, and the required core fields). G3 also requires `decision_thresholds` [{id, value, statement}] in the Grok design, and checks any `owner_holds` for an owner source and a decision output that keeps the rule's action beside the hold.
+- **G5 evidence numbers.** CSV/TSV evidence is read cell by cell; a row such as `x,6,3,0.5` no longer reads as one number.
+- **G5P precheck (new).** Runs exactly the G5 claim and content checks on any ledger (`ledger=`), before review and placement. G0 fails a Stage 5 Second Designer or Risk Reviewer packet that does not carry a precheck log.
+- **Per-claim deliverable check.** G5/G5P fail a claim whose `deliverable` is not one of the ledger's deliverables.
+- **Builder corrections log.** G4c checks `artifacts/stage4/corrections.json` (when present): each entry has old/new hash (new = current file), role, reason and time, and the log is a subject of the G4c review. Replaces unlock/re-freeze.
+- **Report content.** G5/G5P require each decision threshold as a number with its id on one deliverable line, and a triggered owner hold reported on the same line as the rule's action values and the hold id. The owner's stop test is unchanged; only its reporting is checked.
+- Docs: standing rules 18–24, stage notes, handoff additions, role text for all child roles and the parent. Fixture design declares `TH1`; the fixture decision deliverable states it.
+
 ## 0.2.1 — 2026-11-10
 
 Process fixes from the second head-to-head case (no case content or answers). Lessons in docs/lessons.md.

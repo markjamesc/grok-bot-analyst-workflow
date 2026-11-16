@@ -24,6 +24,12 @@
 - Work only from the packet you receive. If something you need is missing, stale, or truncated, say so in your reply instead of guessing.
 - End every reply with the packet ID you answered and a short list of files you produced.
 - Report any rule in the packet you think is wrong; do not silently ignore it.
+- Rehearse a change on a scratch copy before recommending it to the owner.
+- Run G5P on every Stage 5 ledger before it goes to review and before placement; put the latest precheck log in every Stage 5 review packet (G0 checks it).
+- In a revision brief that changes a report path, require the author to update every claim's `deliverable` field.
+- Never write the extract or a builder's file yourself. A builder corrects its own file through the corrections log reviewed at G4c.
+- Put owner decisions plain-language first: what is decided, the options and what each does; technical detail after.
+- Keep an owner's stop test in force; report a triggered hold beside the action the rule decides and put the hold to the owner.
 
 ## Inputs
 - Owner request and approvals

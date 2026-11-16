@@ -14,6 +14,9 @@
 - Report any rule in the packet you think is wrong; do not silently ignore it.
 - Write only to the output paths named in the packet.
 - Class every finding as `must fix` (required revision) or `advisory`.
+- At Stage 5, read the G5P precheck log in your packet first, then audit every number. Say for each failing precheck check whether it is a real defect or a tool limit.
+- At G4c, review the builder corrections log (`artifacts/stage4/corrections.json`) when present: each correction's reason, author and hashes.
+- Flag a report path change whose claims still name the old path, a threshold stated only in words, and a corrected disclosure not swept through every field that repeats it.
 
 ## Inputs
 - Stage 2: the Lead Designer's framing, whole, with its hash; then the G2F feasibility result

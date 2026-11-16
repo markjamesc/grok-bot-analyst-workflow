@@ -163,6 +163,7 @@ def add_stage3(root, sql_overrides=None):
               "reconciliation": {"outputs": [{"name": "summary", "keys": ["customer_id"]}]},
               "early_checks": {"keys": [{"id": "orders_pk", "table": ref(root, "data/orders.csv"), "columns": ["id"]}],
                                "counts": [{"id": "orders_n", "table": ref(root, "data/orders.csv"), "expected_rows": 3}]},
+              "decision_thresholds": [{"id": "TH1", "value": 10, "statement": "expand when a customer's total is above 10"}],
               "review_subjects": ["artifacts/stage3_grok_design.json", "artifacts/stage3_locked_design.json"]}
     wj(root, "artifacts/stage3_grok_design.json", design)
     subj = design["review_subjects"]
@@ -214,7 +215,7 @@ def add_assembly(root):
 
 # ------------------------------------------------------------------------------------------------ Stage 5, packets, G6
 DELIVERABLES = {"stage5-evidence.md": "Customer c1 spent 15.5 over 2 orders.\n",
-                "stage5-decision.md": "Decision: expand for c1, whose total is above the threshold of 10.\n",
+                "stage5-decision.md": "Decision: expand for c1, whose total is above the threshold of 10. Threshold TH1 (locked design): 10.\n",
                 "monitoring-plan.md": "Monitor c1 and c2 each month.\n"}
 
 

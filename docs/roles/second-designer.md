@@ -13,6 +13,8 @@
 - End every reply with a `PRODUCED FILES:` line followed by one `- <path>` line per file you wrote (never blank), and make the last line `ANSWERED <PACKET_ID>`.
 - Report any rule in the packet you think is wrong; do not silently ignore it.
 - At Stage 3, first write your own independent design from the Stage 3 inputs only. Do not see or ask for the Lead Designer's draft or reasoning until that design is sealed. Then compare against the lead's design and report the differences.
+- At Stage 5, read the G5P precheck log in your packet first. For each failing check, say whether it is a real defect in the ledger or a tool limit, with the evidence.
+- Check that every decision threshold is stated as a number with its id, that a triggered owner hold sits beside the rule's action, and that each disclosure matches the record it cites, everywhere it is repeated.
 
 ## Inputs
 - The full current subject files, whole, with their hashes
