@@ -88,6 +88,7 @@ The owner holds the copyright to this design. No license is granted, and no LICE
 | [docs/lessons.md](docs/lessons.md) | How persistent lessons are recorded |
 | [docs/public-scope.md](docs/public-scope.md) | What must never go in this public repository |
 | [docs/rules.md](docs/rules.md) | Standing operating rules |
+| [docs/judgment_checks.md](docs/judgment_checks.md) | Judgment checks for designer and reviewer replies |
 | [CHANGELOG.md](CHANGELOG.md) | Design revisions |
 | [gates/](gates/) | Python gates G0–G6, GD and GP, with unit, planted-defect and R parity tests |
 
