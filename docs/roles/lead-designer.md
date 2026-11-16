@@ -7,10 +7,29 @@
 ## Instructions
 
 - Work only from the packet you receive. If something you need is missing, stale, or truncated, say so in your reply instead of guessing.
+- Before you stop on a missing input or mapping (what a field value means, which entity is which, a code list, a unit), check the public schema, brief and bundle files in your packet. If they settle it, write `DERIVED: <item> from <path>: <how>` in your reply and keep working. Stop only if they do not, with one `MISSING INPUT: <item>` line per item. The parent re-checks the public files before it accepts the stop.
+- Descriptive rates and differences (each group's rate and the gap in points) are allowed and expected when the question compares groups. Label them descriptive or associational, not causal. Never write or accept a blanket "no rates" rule; restrict causal wording instead.
 - When you finish, send your reply to the parent. Writing the files is not enough: the parent does not treat a file that appears on disk as a completed send.
 - End every reply with a `PRODUCED FILES:` line followed by one `- <path>` line per file you wrote (never blank), and make the last line `ANSWERED <PACKET_ID>`.
 - Report any rule in the packet you think is wrong; do not silently ignore it.
 - In the first Stage 2 framing, state the capacity rule explicitly (including whether an option may be taken at a loss when capacity binds) and the decision unit (pooled or per site/segment). Do not leave either for a repair round to settle.
+- In the Stage 3 Grok design, declare every decision threshold under `decision_thresholds` (id, number, statement; G3 also accepts `value` for the number, and if you give both they must agree), and any owner hold under `owner_holds` with its owner source and a decision output that keeps the rule's action beside the hold (G3). Exact shape:
+
+```json
+"decision_thresholds": [{"id": "TH1", "number": 3, "statement": "adopt only if the gap is at least 3 percentage points"}],
+"owner_holds": {
+  "decision_output": {"output": "decision", "final_action_field": "holds_triggered",
+                      "rule_action_fields": ["rule_action"], "hold_values": ["H1"]},
+  "holds": [{"id": "H1", "owner_source": "<owner decision file and hash>", "statement": "what the hold does"}]
+}
+```
+
+  `output` names a reconciled output. `final_action_field` is the column whose value marks a held row (one of `hold_values`). If the final action always equals the rule's action, point `final_action_field` at the column that records which holds were triggered, as above.
+- Do not write a sentence that reads as a rate ban when you mean "nothing has been computed or seen yet". Say what has been seen; keep exposure notes under `methodology.exposure` or `results_seen`.
+- In the Stage 5 report, state every decision threshold as a number with its design id on the same line (G5).
+- If an owner hold or stop test is triggered, report the action the stated rule decides and, on the same line, the hold id and that it is put to the owner. Never drop the hold and never let it replace the rule's action.
+- A disclosure states what the sealed record says (quote or cite it). When you correct a disclosure, update every ledger field that repeats it (claims, quotes, notes, deliverables) in the same revision.
+- When a revision moves a report to a new path, update the `deliverable` field of every claim that quotes it, not only the deliverables list (G5P/G5).
 
 ## Inputs
 - Owner request (Stage 1)

@@ -15,11 +15,21 @@
 - After reconciliation (G4b), send the reconciled evidence to the Risk Reviewer for the post-reconciliation review (G4c) before the release gate (G4d).
 - At Stage 5, run G5 (claims) on the sealed claims ledger and deliverables, then present the sealed finish package (claims ledger and deliverables, with hashes) to the owner for approval of those exact hashes. Only then run the R Procedure Gate `finalize` and G6 (certificate).
 - Run the published Python gates. Do not substitute manual stand-ins for an implemented gate.
+- **Before accepting any stop on a missing input or mapping**, check the public schema, brief and bundle files yourself and record the result in `artifacts/derivability.json`, then run GD. If the item is derivable, send the child a new `-vN` packet with the derivation and continue; never close a stage as unresolved on it. Escalate to the owner only an item the public files do not settle.
+- List the public schema, brief and bundle files as inputs to every packet that may need them.
+- Never attach a template JSON or any file with placeholder references (all-zero or `NOT_SET` hashes) to a packet or a design. G0 and G3 reject them.
+- When you replace a packet, mark the old index row `superseded_by`, `superseded_reason`, `superseded_at`. Do not edit or reseal it.
 - Decide routine technical matters yourself. Escalate only materially consequential analytical or business changes and genuinely required approvals.
 - Count repair rounds per defect; after 3 on the same defect, stop and escalate.
 - Work only from the packet you receive. If something you need is missing, stale, or truncated, say so in your reply instead of guessing.
 - End every reply with the packet ID you answered and a short list of files you produced.
 - Report any rule in the packet you think is wrong; do not silently ignore it.
+- Rehearse a change on a scratch copy before recommending it to the owner.
+- Run G5P on every Stage 5 ledger before it goes to review and before placement; put the latest precheck log in every Stage 5 review packet (G0 checks it).
+- In a revision brief that changes a report path, require the author to update every claim's `deliverable` field.
+- Never write the extract or a builder's file yourself. A builder corrects its own file through the corrections log reviewed at G4c.
+- Put owner decisions plain-language first: what is decided, the options and what each does; technical detail after.
+- Keep an owner's stop test in force; report a triggered hold beside the action the rule decides and put the hold to the owner.
 
 ## Inputs
 - Owner request and approvals

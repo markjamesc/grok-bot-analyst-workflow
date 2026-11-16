@@ -26,6 +26,18 @@ PRODUCED FILES:
 ANSWERED <PACKET_ID>
 ```
 
+A reply that settled a missing item from the public files says so before the list, one line per item, and keeps working:
+
+```text
+DERIVED: <item> from <public file path>: <how>
+```
+
+A reply that must stop because the public files do not settle an item says so, one line per item:
+
+```text
+MISSING INPUT: <item>
+```
+
 ## Parent duties
 - List every packet in `artifacts/packets/index.json` (id, path, status draft/sent/answered, sealed sha256, and the sealed reply once answered) and run G0 before each send and after each capture.
 - Build each sent packet from the template as a new file; never send the template. G0 rejects `TEMPLATE` text, `{{placeholders}}` and the format's `<...>` placeholders.
@@ -34,6 +46,9 @@ ANSWERED <PACKET_ID>
 - Name the output paths in each packet under EXPECTED OUTPUT. The child writes only to those paths.
 - Check the reply against EXPECTED OUTPUT before sealing it.
 - A correction is a new packet with a `-vN` suffix that names what it supersedes.
+- When a packet is replaced (for example a sent packet that failed G0), mark the old row in `artifacts/packets/index.json` with `superseded_by` (the newer packet id), `superseded_reason` and `superseded_at` (ISO timestamp with zone). Never edit or reseal the old packet.
+- List the public schema, brief and bundle files as inputs in every packet that might need them, so a child can derive a value meaning or a mapping instead of stopping.
+- Never attach a template JSON (`*.example.json`) or any JSON with placeholder references as an input. Attach the adapted, real file or a prose summary (G0).
 
 ## Stage 3 packets for the Second Designer
 - First packet: Stage 3 inputs only. Do not include the Lead Designer's draft or reasoning.
@@ -55,3 +70,12 @@ ANSWERED <PACKET_ID>
 
 ## Stage 4 packets for the Risk Reviewer
 - After the parent reconciles R-A, R-B, and SQL (G4b), send the reconciliation report and the reconciled evidence for the G4c review. Name the output paths in the packet.
+
+## Case02 additions
+- **Stage 5 review packets** list the latest G5P precheck log of the ledger under review as an input (G0 fails a Stage 5 Second Designer or Risk Reviewer packet without one). A reviewer reads the precheck first and says whether each failing check is a real defect or a tool limit.
+- **Stage 5 review record shape** (G5): `{"role", "subjects": [{path, sha256}], "findings": [{"id": "SD5-01", "class": "must_fix"|"advisory", "status": "open"|"closed", ...}], "claim_results": [...], "uncovered_claims": [], "verdict"}`. Ids carry the role: `SD5-` Second Designer, `RR5-` Risk Reviewer, `X5-` cross review. `uncovered_claims` is `[]` when every claim is covered, otherwise a list of claim ids; never a note. Every declared companion file of the finish package is a subject of both reviews.
+- **Capture, then promote.** The step that saves a reply sets the packet to `captured`. `python3 -m gates.packet promote <root> <id>` sets it to `answered` only when G0 passes. Nothing may seal a captured packet's files.
+- **Cite versioned paths.** A review should cite the ledger it read by its versioned copy (for example `outputs/<packet>/stage5_claims_vNN.json`). When the canonical ledger is replaced after a review cited it, the archiving step writes the H1 historical-send record (`artifacts/operations/finish.historical.json` and its supersession record); G5P and G5 fail an unresolved stale reference.
+- **Revision briefs that change a report path** say, in the brief: "update the `deliverable` field of every claim that quotes the moved report, not only the deliverables list". G5P catches a miss before placement.
+- **Builders' corrections** before send are logged in `artifacts/stage4/corrections.json`; the brief never asks the parent to unlock or re-freeze a builder's file, and the parent never writes the extract.
+- **Owner decisions** in a packet or brief are stated plain-language first (what is being decided, the options, what each does), then the technical detail.

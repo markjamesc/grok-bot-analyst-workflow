@@ -63,6 +63,9 @@ These are design requirements for this draft. Items 1, 8 and 9 have Python gate 
 - **No writes to live systems** without owner approval. Default execution uses frozen, hashed extracts or an owner-approved read-only source.
 - **Review coverage.** A required review counts only if that role received every current subject whole, at the same project path, with the current hash.
 - **A recorded split is not a guarantee of independent errors.**
+- **Check public files before stopping.** A missing input or mapping is checked against the public schema, brief and bundle files first; derivable items are recorded and the work continues; only non-derivable items stop and go to the owner (GD, inside G0).
+- **Descriptive rates are allowed and expected**, labeled descriptive or associational, not causal. No blanket "no rates" rule (G3, G5).
+- **No template placeholders in evidence** (G0 at send, G3 at the design lock), and **replaced packets are marked superseded** in the packet index (G0).
 
 ## Run cap (head-to-head test)
 
@@ -86,13 +89,13 @@ The owner holds the copyright to this design. No license is granted, and no LICE
 | [docs/public-scope.md](docs/public-scope.md) | What must never go in this public repository |
 | [docs/rules.md](docs/rules.md) | Standing operating rules |
 | [CHANGELOG.md](CHANGELOG.md) | Design revisions |
-| [gates/](gates/) | Python gates G0–G6 and GP, with unit, planted-defect and R parity tests |
+| [gates/](gates/) | Python gates G0–G6, GD and GP, with unit, planted-defect and R parity tests |
 
 ## Status
 
 This is design documentation plus the Python gate implementation.
 
-- **Implemented and tested:** G0 (packet integrity), G1, G2, G2F, G3S (SQLite engine only), G3K, G3, G4a, G4b, G4c, G4d, G5 (claims), G6 (certificate) and GP (assembly regression), plus the repair cap (3, then escalate). G1, G2, G3, G4d and G5 include ported R stage checks, and G4d includes the whole ported R Workflow Gate; those ports pass R-vs-Python parity on the R repo's own test suites and on the gate fixtures. G6 requires the R Procedure Gate `finalize` certificate and re-checks every hash it recorded. G0 has no R counterpart. Tests use synthetic data only.
+- **Implemented and tested:** G0 (packet integrity), G1, G2, G2F, G3S (SQLite engine only), G3K, G3, G4a, G4b, G4c, G4d, G5 (claims), G6 (certificate), GD (public-file derivability) and GP (assembly regression), plus the repair cap (3, then escalate). G1, G2, G3, G4d and G5 include ported R stage checks, and G4d includes the whole ported R Workflow Gate; those ports pass R-vs-Python parity on the R repo's own test suites and on the gate fixtures. G6 requires the R Procedure Gate `finalize` certificate and re-checks every hash it recorded. G0 has no R counterpart. Tests use synthetic data only.
 - G3S runs on SQLite only; other engines need an executor (otherwise TOOL_ERROR).
 - No workflow has been started from these gates yet.
 

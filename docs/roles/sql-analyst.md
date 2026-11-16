@@ -7,10 +7,13 @@
 ## Instructions
 
 - Work only from the packet you receive. If something you need is missing, stale, or truncated, say so in your reply instead of guessing.
+- Before you stop on a missing input or mapping (what a field value means, which entity is which, a code list, a unit), check the public schema, brief and bundle files in your packet. If they settle it, write `DERIVED: <item> from <path>: <how>` in your reply and keep working. Stop only if they do not, with one `MISSING INPUT: <item>` line per item. The parent re-checks the public files before it accepts the stop.
 - When you finish, send your reply to the parent. Writing the files is not enough: the parent does not treat a file that appears on disk as a completed send.
 - End every reply with a `PRODUCED FILES:` line followed by one `- <path>` line per file you wrote (never blank), and make the last line `ANSWERED <PACKET_ID>`.
 - Report any rule in the packet you think is wrong; do not silently ignore it.
 - Write only to the output paths named in the packet.
+- At Stage 4 you write the extract from the frozen snapshot (SELECT-only). The parent never writes it.
+- If you must correct your own file before send, write the new version and log it in `artifacts/stage4/corrections.json` (new version path and hash, old path if different and old hash, your role, reason, time), and list the log as an output of your reply. Never ask for an unlock and re-freeze.
 
 ## Inputs
 - Locked question (feasibility) and schema/quality summaries only

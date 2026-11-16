@@ -8,7 +8,9 @@ the R Procedure Gate `finalize` certificate and re-checks that every hash it rec
 """
 from __future__ import annotations
 
+import csv
 import datetime
+import io
 import json
 import os
 import re
@@ -16,7 +18,7 @@ from decimal import Decimal, InvalidOperation
 
 from gates import methodology as M
 from gates import procedure as P
-from gates import reconcile, repair, sql_select_only
+from gates import guards, reconcile, repair, sql_select_only
 from gates import workflow_gate as WG
 from gates.common import (FAIL, PASS, Gate, ToolError, approval_ok, gate_record_current, ref_current, ref_of,
                           review_checks, safe_rel, sha256_file, text, write_once)
@@ -48,7 +50,11 @@ def r_stage_checks(g, step_id):
 
 
 def _plain(rel, g):
-    full = safe_rel(g.root, rel)
+    return _plain_at(g.root, rel)
+
+
+def _plain_at(root, rel):
+    full = safe_rel(root, rel)
     if full is None:
         return None
     from gates.common import load_json_strict
@@ -321,6 +327,11 @@ def g3(root):
     subj = [s for s in d.get("review_subjects", []) if text(s)] if isinstance(d.get("review_subjects"), list) else []
     g.add("Review subjects declared", bool(subj) and GROK_DESIGN in subj and R_STEP["G3"][1] in subj,
           "review_subjects must include the locked design files")
+    design_lock_guards(g, [GROK_DESIGN, R_STEP["G3"][1]] + subj)
+    lock_completeness_checks(g, d, outs)
+    next_stage_entry_checks(g, root, d)
+    design_version_checks(g, _plain(R_STEP["G3"][1], g))
+    stale_nested_ref_checks(g, root, "design")
     review_checks(g, "artifacts/stage3/reviews/second_designer_compare.json", "second_designer", subj, "Second Designer compare")
     review_checks(g, "artifacts/stage3/reviews/risk_reviewer_red_team.json", "risk_reviewer", subj, "Risk Reviewer red-team")
     review_checks(g, "artifacts/stage3/reviews/risk_reviewer_source_gates.json", "risk_reviewer",
@@ -335,6 +346,224 @@ def g3(root):
           and str(ap.get("design_sha256", "")).lower() == cur_design and str(ap.get("grok_design_sha256", "")).lower() == cur_grok,
           "stage3_owner_approval.json design_sha256 and grok_design_sha256 must equal the current files")
     return g.result()
+
+
+# Fields the nested R Workflow Gate (gates/workflow_gate.py, run inside G4d) reads from the locked Stage 3 design.
+# Lesson L14 (2026-11-15): G3 passed a design without them and the run could only fail at G4d. Check them at lock time.
+WG_STAGE3_REQUIRED = ("stage", "status", "design_version", "population", "grain", "window_start", "window_end", "decision_rules",
+                      "required_outputs")
+WG_STAGE3_SCALARS = ("fixture_version",)
+WG_STAGE3_LISTS = ("fixture_ids", "reconciliation_critical_fields")
+
+
+def workflow_gate_field_gaps(s3, s2):
+    """Names of Stage 3 fields the Workflow Gate needs at G4d that the locked design lacks (plain dicts in, list out)."""
+    s3 = s3 if isinstance(s3, dict) else {}
+    s2 = s2 if isinstance(s2, dict) else {}
+    gaps = [k for k in WG_STAGE3_REQUIRED if k not in s3]
+    if s3.get("ml_mode") not in ("None", "A", "B"):
+        gaps.append("ml_mode")
+    gaps += [k for k in WG_STAGE3_SCALARS if not text(s3.get(k))]
+    gaps += [k for k in WG_STAGE3_LISTS if not (isinstance(s3.get(k), list) and s3[k] and all(text(v) for v in s3[k]))]
+    if s2.get("capacity_stance") == "hard_attention_budget":
+        rc = s3.get("ranking_contract")
+        n = rc.get("n") if isinstance(rc, dict) else None
+        n_ok = isinstance(n, (int, float)) and not isinstance(n, bool) and n >= 1 and float(n) == int(n)
+        if not (isinstance(rc, dict) and all(text(rc.get(k)) for k in ("key", "tie_break", "capacity_unit"))
+                and rc.get("membership_first") is True and rc.get("padding_allowed") is False
+                and (rc.get("owner_n_deferred") is True or n_ok)):
+            gaps.append("ranking_contract")
+    return gaps
+
+
+def lock_completeness_checks(g, d, outs):
+    """Case02 changes 1, 7, 8: Workflow Gate fields present at lock; decision thresholds declared for the Stage 5 report;
+    any owner hold declared with its source and a decision output that records both the rule's action and the hold."""
+    gaps = workflow_gate_field_gaps(_plain(R_STEP["G3"][1], g), _plain(R_STEP["G2"][1], g))
+    g.add("Workflow Gate fields present at lock", not gaps,
+          "the locked design must carry every Stage 3 field the R Workflow Gate reads at G4d" + (f"; missing: {gaps}" if gaps else ""))
+    th = d.get("decision_thresholds")
+    th_ok = isinstance(th, list) and len(th) > 0 and all(
+        isinstance(t, dict) and text(t.get("id")) and threshold_value(t) is not None and text(t.get("statement")) for t in th)
+    th_ok = th_ok and len({t["id"] for t in th}) == len(th)
+    g.add("Decision thresholds declared", th_ok,
+          "decision_thresholds: [{id, number (or value), statement}] for every threshold the decision rule uses (the Stage 5 report "
+          "must state each one numerically with its id)")
+    oh = d.get("owner_holds")
+    if oh is None:
+        g.add("Owner holds declared with source", True, "no owner hold in the design")
+        return
+    names = {o.get("name") for o in outs or [] if isinstance(o, dict)}
+    do = oh.get("decision_output") if isinstance(oh, dict) else None
+    holds = oh.get("holds") if isinstance(oh, dict) else None
+    ok = (isinstance(do, dict) and do.get("output") in names and text(do.get("final_action_field"))
+          and isinstance(do.get("rule_action_fields"), list) and do["rule_action_fields"] and all(text(f) for f in do["rule_action_fields"])
+          and isinstance(do.get("hold_values"), list) and do["hold_values"] and all(text(v) for v in do["hold_values"])
+          and isinstance(holds, list) and holds
+          and all(isinstance(h, dict) and text(h.get("id")) and text(h.get("owner_source")) and text(h.get("statement")) for h in holds))
+    g.add("Owner holds declared with source", ok,
+          "owner_holds: {decision_output {output (a reconciled output), final_action_field, rule_action_fields[], hold_values[]}, "
+          "holds [{id, owner_source, statement}]}: a hold comes from an owner decision and the output keeps the rule's action beside it")
+
+
+def threshold_value(t):
+    """A decision threshold's number (case02 change A6: docs say `number`, older gate code read `value`; both are accepted).
+    When both are given they must agree."""
+    if not isinstance(t, dict):
+        return None
+    vals = [_num(str(t[k])) for k in ("number", "value") if k in t and t[k] is not None]
+    if not vals or any(v is None for v in vals) or len(set(vals)) != 1:
+        return None
+    return vals[0]
+
+
+def _tolerance_shape_ok(tol):
+    """The tolerance shape G4a/G4b read: absent, or {fields: [names], absolute_tolerance?, relative_tolerance?,
+    numeric_missingness?}. A bare number is not accepted (case02 lesson A2)."""
+    if tol is None:
+        return True
+    if not isinstance(tol, dict) or not isinstance(tol.get("fields", []), list) or not all(text(f) for f in tol.get("fields", [])):
+        return False
+    for k in ("absolute_tolerance", "relative_tolerance"):
+        v = tol.get(k, 0)
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or v < 0:
+            return False
+    nm = tol.get("numeric_missingness")
+    return nm is None or isinstance(nm, dict)
+
+
+def next_stage_entry_checks(g, root, d):
+    """Case02 change A2 (owner rule: a design is not locked until the next stage's entry gates pass on it). Runs the
+    G4a/G4b shape checks on the locked fixtures now: each worked answer is compared with itself using the fixture's keys
+    and tolerance through the same reconcile.compare that G4a uses, and every tolerance has the shape G4a/G4b read.
+    A blank or duplicated key, a missing key column or a bare-number tolerance fails here instead of at Stage 4."""
+    fx = d.get("fixtures") if isinstance(d.get("fixtures"), list) else []
+    bad = []
+    for f in fx:
+        f = f if isinstance(f, dict) else {}
+        lab = f"fixture {f.get('id')}"
+        tol = f.get("tolerance")
+        if not _tolerance_shape_ok(tol):
+            bad.append(f"{lab}: tolerance must be {{fields: [...], absolute_tolerance, relative_tolerance}}, not {type(tol).__name__}")
+            tol = None
+        wa = f.get("worked_answer")
+        if not ref_current(root, wa):
+            bad.append(f"{lab}: worked answer not current")
+            continue
+        ok, det = reconcile.compare(root, wa, wa, f.get("keys") or [], tol)
+        if not ok:
+            bad.append(f"{lab}: {det.get('error') or 'self-comparison failed'}")
+    rc = d.get("reconciliation")
+    outs = rc.get("outputs") if isinstance(rc, dict) and isinstance(rc.get("outputs"), list) else []
+    for o in outs:
+        o = o if isinstance(o, dict) else {}
+        if not _tolerance_shape_ok(o.get("tolerance")):
+            bad.append(f"output {o.get('name')}: tolerance must be {{fields: [...], ...}}, not {type(o.get('tolerance')).__name__}")
+        keys = o.get("keys")
+        if not (isinstance(keys, list) and keys and all(text(k) for k in keys) and len(set(keys)) == len(keys)):
+            bad.append(f"output {o.get('name')}: keys must be non-blank and unique")
+    g.add("Next-stage entry check (G4a/G4b shape) passes on the locked design", bool(fx) and not bad,
+          "each fixture's worked answer compared with itself by G4a's compare, and every tolerance in G4a/G4b's shape"
+          + (f"; failed: {bad[:6]}" if bad else ""))
+
+
+VERSION_IN_NAME = re.compile(r"_v(\d+)\.[A-Za-z0-9]+$")
+
+
+def _version_number(v):
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, int):
+        return v
+    if not isinstance(v, str):
+        return None
+    m = re.search(r"(?:^|[^A-Za-z0-9])v(\d+)\b", v) or re.search(r"\b(\d+)\b", v)
+    return int(m.group(1)) if m else None
+
+
+def design_version_checks(g, s3):
+    """Case02 change A7: every versioned docs/stage3 file the locked design names (deliverables, stage_records) carries the
+    locked design version; fixture files carry the fixture version when it has a number. Catches a design locked as v04
+    whose deliverables still name the v02 files."""
+    s3 = s3 if isinstance(s3, dict) else {}
+    dv, fv = _version_number(s3.get("design_version")), _version_number(s3.get("fixture_version"))
+    paths = [x for x in s3.get("deliverables", []) if isinstance(x, str)] if isinstance(s3.get("deliverables"), list) else []
+    sr = s3.get("stage_records")
+    paths += [x.get("path") for x in sr if isinstance(x, dict) and isinstance(x.get("path"), str)] if isinstance(sr, list) else []
+    wrong = []
+    for pth in dict.fromkeys(paths):
+        m = VERSION_IN_NAME.search(pth)
+        if not m or not pth.startswith("docs/stage3/"):
+            continue
+        want = fv if "/fixtures/" in pth else dv
+        if want is not None and int(m.group(1)) != want:
+            wrong.append(f"{pth} (expected v{want:02d})")
+    g.add("Locked design names its own version's files", dv is not None and not wrong,
+          f"design_version {s3.get('design_version')!r}" + (f"; wrong version: {wrong[:6]}" if wrong else "; every versioned file matches")
+          + ("" if dv is not None else "; design_version has no version number"))
+
+
+def stale_nested_refs(root, stage):
+    """Case02 change A10. [(send id, attachment, nested path, cited sha256)] for every {path, sha256} reference inside a
+    JSON attachment of a send in artifacts/operations/<stage>.json that no longer matches the current file, and that is
+    not resolved by an H1 historical-send record (artifacts/operations/<stage>.historical.json naming the send, whose
+    supersession record maps the path in superseded_inputs to a current archived copy with the cited hash)."""
+    ops = _plain_at(root, f"artifacts/operations/{stage}.json")
+    sends = ops.get("sends") if isinstance(ops, dict) and isinstance(ops.get("sends"), list) else []
+    hist = _plain_at(root, f"artifacts/operations/{stage}.historical.json")
+    hmap = {}
+    for e in (hist.get("historical_sends") if isinstance(hist, dict) and isinstance(hist.get("historical_sends"), list) else []):
+        if isinstance(e, dict) and ref_current(root, e.get("supersession")):
+            rec = _plain_at(root, e["supersession"]["path"]) or {}
+            named = rec.get("historical_sent_fail") == e.get("send_id") or e.get("send_id") in (rec.get("historical_sends") or [])
+            si = rec.get("superseded_inputs") if isinstance(rec.get("superseded_inputs"), dict) else {}
+            if named:
+                hmap[e.get("send_id")] = si
+    out = []
+    for snd in sends:
+        if not isinstance(snd, dict):
+            continue
+        for att in snd.get("attachments") or []:
+            if not (isinstance(att, dict) and text(att.get("path")) and att["path"].lower().endswith(".json") and ref_current(root, att)):
+                continue
+            obj = _plain_at(root, att["path"])
+            for ref in guards.nested_refs(obj):
+                cited = str(ref.get("sha256")).lower()
+                if ref_current(root, ref):
+                    continue
+                arch = hmap.get(snd.get("id"), {}).get(ref.get("path"))
+                if isinstance(arch, dict) and str(arch.get("sha256", "")).lower() == cited and ref_current(root, arch):
+                    continue
+                out.append((snd.get("id"), att["path"], ref.get("path"), cited))
+    return out
+
+
+def stale_nested_ref_checks(g, root, stage):
+    stale = stale_nested_refs(root, stage)
+    g.add(f"No stale nested references in the {stage} sends", not stale,
+          "every {path, sha256} cited inside a sent JSON attachment is current, or the send is declared historical (H1) with an "
+          "archived copy of the cited bytes" + (f"; stale: {[f'{a} -> {c} ({b})' for a, b, c, _ in stale[:5]]}" if stale else ""))
+
+
+def design_lock_guards(g, rels):
+    """Lessons L11/L12 (gates/guards.py): no template placeholder reference anywhere in the design files or the JSON files
+    they reference, and no blanket ban on labeled descriptive rates."""
+    rels = list(dict.fromkeys(r for r in rels if text(r)))
+    hits = guards.placeholder_refs(g.root, rels)
+    g.add("No template placeholder references in the design", not hits,
+          (guards.describe(hits) + " -- " + guards.TEMPLATE_HINT) if hits else "none")
+    bans = []
+    for rel in rels:
+        body = _read_text(g.root, rel)
+        if body is None:
+            continue
+        if rel.lower().endswith(".json"):
+            obj = _plain(rel, g)
+            body = "\n".join(guards.text_strings(obj, skip_keys=guards.EXPOSURE_KEYS)) if obj is not None else body
+        bans += [f"{rel}: {h}" for h in guards.rate_ban_hits(body)]
+    g.add("Descriptive rates not banned", not bans,
+          "labeled descriptive (associational) rates and differences are allowed and expected; restrict causal wording "
+          "instead of banning rates" + (f"; ban found: {bans[:4]}" if bans else ""))
 
 
 def _g3s_sql_paths(root):
@@ -436,8 +665,36 @@ def g4c(root):
         for r in ((o.get("outputs") or {}).get(impl) or {}).values() if isinstance(o.get("outputs"), dict) else []:
             if isinstance(r, dict) and text(r.get("path")):
                 files.append(r["path"])
-    review_checks(g, "artifacts/stage4/reviews/risk_reviewer_g4c.json", "risk_reviewer", files, "Risk Reviewer post-reconciliation")
+    corr = corrections_checks(g, root)
+    review_checks(g, "artifacts/stage4/reviews/risk_reviewer_g4c.json", "risk_reviewer", files + corr, "Risk Reviewer post-reconciliation")
     return g.result()
+
+
+CORRECTIONS = "artifacts/stage4/corrections.json"
+
+
+def corrections_checks(g, root):
+    """Case02 change 4: a builder never unlocks and re-freezes a file. A correction to its own file before send is logged in
+    artifacts/stage4/corrections.json {corrections[{id, path, old_path?, old_sha256, new_sha256, author_role, reason, logged_at}]};
+    `path` is the corrected (new) version and its current hash is new_sha256 (old_path names the earlier version when it differs), and the log is a subject of the G4c review. Returns extra review subjects."""
+    full = safe_rel(root, CORRECTIONS)
+    if full is None or not os.path.exists(full):
+        g.add("Builder corrections logged", True, "no corrections logged")
+        return []
+    c = g.load(CORRECTIONS, "Builder corrections log") or {}
+    es = c.get("corrections")
+    bad = []
+    for e in es if isinstance(es, list) else []:
+        e = e if isinstance(e, dict) else {}
+        well = (all(text(e.get(k)) for k in ("id", "path", "author_role", "reason", "logged_at"))
+                and all(isinstance(e.get(k), str) and re.fullmatch(r"[0-9a-f]{64}", e[k].lower() or "") for k in ("old_sha256", "new_sha256"))
+                and e.get("old_sha256", "").lower() != e.get("new_sha256", "").lower())
+        if not (well and ref_current(root, {"path": e.get("path"), "sha256": e.get("new_sha256")})):
+            bad.append(e.get("id"))
+    g.add("Builder corrections logged", isinstance(es, list) and bool(es) and not bad,
+          "corrections: [{id, path (new version), old_path (optional), old_sha256, new_sha256 (= current file at path), author_role, reason, logged_at}]"
+          + (f"; malformed or not current: {bad}" if bad else ""))
+    return [CORRECTIONS]
 
 
 # ------------------------------------------------------------------------------------------------ G4d release
@@ -494,6 +751,21 @@ def numbers_in(s):
     return {n for n in (_num(m.group(0)) for m in NUM_RE.finditer(s)) if n is not None}
 
 
+def evidence_numbers(rel, body):
+    """Numbers in an evidence file. CSV/TSV files are read cell by cell (lesson L15: a whole row such as `x,6,3,0.5`
+    otherwise reads as one comma-grouped number and no cell value can be traced)."""
+    if not isinstance(body, str):
+        return set()
+    low = str(rel or "").lower()
+    if low.endswith((".csv", ".tsv")):
+        out = set()
+        for row in csv.reader(io.StringIO(body), delimiter="\t" if low.endswith(".tsv") else ","):
+            for cell in row:
+                out |= numbers_in(cell)
+        return out
+    return numbers_in(body)
+
+
 def _read_text(root, rel):
     full = safe_rel(root, rel)
     try:
@@ -537,6 +809,24 @@ def g5(root):
     r_dl = [x for x in (r_dl if isinstance(r_dl, list) else [r_dl] if isinstance(r_dl, str) else []) if isinstance(x, str)]
     g.add("Deliverables equal the R finish receipt", bool(r_dl) and set(r_dl) == set(dpaths),
           f"R receipt {sorted(r_dl)}; claims ledger {sorted(p for p in dpaths if text(p))}")
+    claim_checks(g, root, c, dpaths)
+    finish_content_checks(g, root, dpaths)
+    ap5 = _plain(FINISH_APPROVAL, g)
+    if ap5 is not None:
+        g.use(FINISH_APPROVAL)
+    comps = companion_checks(g, root, c, approval=ap5)
+    status_word_checks(g, root, [pth for pth in dpaths if text(pth)] + comps)
+    stale_nested_ref_checks(g, root, "finish")
+    subj = [CLAIMS] + [pth for pth in dpaths if text(pth)] + comps
+    review_checks(g, S5_REVIEWS[0], "second_designer", subj, "Second Designer inference")
+    review_checks(g, S5_REVIEWS[1], "risk_reviewer", subj, "Risk Reviewer numbers")
+    stage5_review_shape_checks(g, root)
+    repair.cap_checks(g)
+    return g.result()
+
+
+def claim_checks(g, root, c, dpaths):
+    """The G5 claim checks, shared by G5 and the G5P precheck so that a precheck mirrors G5 exactly."""
     s3 = _plain(R_STEP["G3"][1], g) or {}
     allowed = ((s3.get("methodology") or {}).get("analytical_target") or {}).get("allowed_claim_types") if isinstance(s3.get("methodology"), dict) else None
     allowed = [a for a in allowed if a in CLAIM_TYPES] if isinstance(allowed, list) and allowed else list(CLAIM_TYPES)
@@ -553,6 +843,12 @@ def g5(root):
         lab = f"Claim {x.get('id')}"
         g.add(f"{lab} type within the claim ceiling", x.get("type") in allowed, f"type in {allowed} (locked design)")
         q, dv = x.get("quote"), x.get("deliverable")
+        g.add(f"{lab} deliverable listed in deliverables", text(dv) and dv in dpaths,
+              f"claim deliverable {dv!r} must be one of the ledger deliverables {sorted(p for p in dpaths if text(p))}; when the report "
+              "path changes, update every claim's deliverable field, not only the deliverables list")
+        if guards.states_rate(q):
+            g.add(f"{lab} rate labeled descriptive", guards.rate_claim_labeled(x),
+                  "a rate or difference is reported as descriptive/associational, not causal: say so in `label` or the quote")
         in_dl = text(q) and dv in texts and texts[dv] is not None and q in texts[dv]
         g.add(f"{lab} quoted verbatim from a deliverable", in_dl, "quote must appear verbatim in the named deliverable")
         if in_dl:
@@ -570,21 +866,238 @@ def g5(root):
         ev_nums = set()
         for e in ev:
             t = _read_text(root, e.get("path")) if isinstance(e, dict) and text(e.get("path")) else None
-            ev_nums |= numbers_in(t) if t else set()
+            ev_nums |= evidence_numbers(e.get("path"), t) if t else set()
         der = x.get("derived", [])
         der = der if isinstance(der, list) else []
         der_ok = all(isinstance(d, dict) and _num(str(d.get("value", ""))) is not None and text(d.get("basis")) for d in der)
         der_vals = {_num(str(d.get("value"))) for d in der if isinstance(d, dict)} if der_ok else set()
         loose = sorted(numbers_in(q) - ev_nums - der_vals) if text(q) else []
         g.add(f"{lab} every number traced", der_ok and not loose,
-              "each number in the quote appears in its evidence or is listed under derived [{value, basis}]"
-              + (f"; untraced: {loose}" if loose else "") + ("" if der_ok else "; derived entries malformed"))
+              "each number in the quote appears in its evidence (CSV evidence is read cell by cell) or is listed under derived "
+              "[{value (a numeral), basis}]" + (f"; untraced: {loose}" if loose else "") + ("" if der_ok else "; derived entries malformed"))
     uncovered = [pth for pth in dpaths if text(pth) and pth not in covered]
     g.add("Every deliverable carries a recorded claim", bool(dpaths) and not uncovered, f"no claim quoted from: {uncovered}" if uncovered else "ok")
-    subj = [CLAIMS] + [pth for pth in dpaths if text(pth)]
-    review_checks(g, "artifacts/stage5/reviews/second_designer_inference.json", "second_designer", subj, "Second Designer inference")
-    review_checks(g, "artifacts/stage5/reviews/risk_reviewer_numbers.json", "risk_reviewer", subj, "Risk Reviewer numbers")
-    repair.cap_checks(g)
+
+
+def _lines(root, dpaths):
+    out = []
+    for pth in dpaths:
+        t = _read_text(root, pth) if text(pth) else None
+        out += [(pth, ln) for ln in (t or "").splitlines()]
+    return out
+
+
+def _decision_rows(root, do):
+    o = _plain_at(root, OUTPUTS) or {}
+    impl = do.get("impl", "ra") if isinstance(do, dict) else "ra"
+    ref = (((o.get("outputs") or {}).get(impl) or {}).get(do.get("output")) if isinstance(o.get("outputs"), dict) else None) or {}
+    body = _read_text(root, ref.get("path")) if isinstance(ref, dict) and text(ref.get("path")) else None
+    if body is None:
+        return None
+    return list(csv.DictReader(io.StringIO(body)))
+
+
+def finish_content_checks(g, root, dpaths):
+    """Case02 changes 7 and 8 on the Stage 5 deliverables (shared by G5 and G5P)."""
+    d = _plain(GROK_DESIGN, g) or {}
+    lines = _lines(root, dpaths)
+    th = d.get("decision_thresholds") if isinstance(d.get("decision_thresholds"), list) else []
+    missing = []
+    for t in th:
+        if not isinstance(t, dict):
+            continue
+        tid, val = str(t.get("id", "")), threshold_value(t)
+        idre = re.compile(r"(?<![\w-])" + re.escape(tid) + r"(?![\w-])")
+        if not any(idre.search(ln) and val in numbers_in(ln) for _, ln in lines):
+            missing.append(tid)
+    g.add("Decision thresholds stated numerically", bool(th) and not missing,
+          "each decision_thresholds entry of the Grok design appears in a deliverable as its number and its id on the same line"
+          + (f"; not stated: {missing}" if missing else "") + ("" if th else "; the design declares no decision_thresholds"))
+    oh = d.get("owner_holds")
+    if not isinstance(oh, dict):
+        g.add("Owner hold reported beside the rule's action", True, "no owner hold in the design")
+        return
+    do = oh.get("decision_output") or {}
+    rows = _decision_rows(root, do)
+    if rows is None:
+        g.add("Owner hold reported beside the rule's action", False, f"decision output {do.get('output')!r} not readable from {OUTPUTS}")
+        return
+    hold_ids = [h.get("id") for h in oh.get("holds", []) if isinstance(h, dict) and text(h.get("id"))]
+    held = [r for r in rows if r.get(do.get("final_action_field")) in (do.get("hold_values") or [])]
+    bad = []
+    for r in held:
+        acts = [r.get(f) for f in do.get("rule_action_fields") or [] if text(r.get(f))]
+        ok = bool(acts) and any(all(a in ln for a in acts) and any(h in ln for h in hold_ids) for _, ln in lines)
+        if not ok:
+            bad.append(acts)
+    g.add("Owner hold reported beside the rule's action", not bad,
+          ("no hold triggered" if not held else "a triggered owner hold is reported on the same line as the action the stated rule "
+           "decides (rule action values and the hold id); the hold stays with the owner, the rule's action is never withheld")
+          + (f"; rule action not reported beside the hold: {bad}" if bad else ""))
+
+
+S5_REVIEWS = ("artifacts/stage5/reviews/second_designer_inference.json", "artifacts/stage5/reviews/risk_reviewer_numbers.json")
+G4C_REVIEW = "artifacts/stage4/reviews/risk_reviewer_g4c.json"
+COMPANION_IN_APPROVAL = re.compile(r"\bcompanion\s+(?:file\s+)?(\S+?)\s+sha256[ =:]*([0-9a-fA-F]{64})\b")
+
+
+def declared_companions(c, approval):
+    """Companion files of the finish package (case02 change A5): `companions: [{path, sha256}]` in the claims ledger or the
+    owner finish approval, or a `companion <path> sha256 <hash>` phrase in the approval text. Returns {path: sha256}."""
+    out = {}
+    for src in (c, approval):
+        cs = src.get("companions") if isinstance(src, dict) else None
+        for x in cs if isinstance(cs, list) else []:
+            if isinstance(x, dict) and text(x.get("path")):
+                out.setdefault(x["path"], str(x.get("sha256", "")).lower())
+    at = approval.get("approval_text") if isinstance(approval, dict) else None
+    for m in COMPANION_IN_APPROVAL.finditer(at or ""):
+        out.setdefault(m.group(1).rstrip(";,."), m.group(2).lower())
+    return out
+
+
+def companion_checks(g, root, c, approval):
+    """Every declared companion is current at its declared hash and every source declares the same hash. Returns the paths,
+    which G5 adds to the review subjects of both Stage 5 reviews and to the status-word check."""
+    comps = declared_companions(c, approval)
+    srcs = []
+    for src in (c, approval):
+        cs = src.get("companions") if isinstance(src, dict) and isinstance(src.get("companions"), list) else []
+        srcs.append({x.get("path"): str(x.get("sha256", "")).lower() for x in cs if isinstance(x, dict)})
+    at = approval.get("approval_text") if isinstance(approval, dict) else None
+    srcs.append({m.group(1).rstrip(";,."): m.group(2).lower() for m in COMPANION_IN_APPROVAL.finditer(at or "")})
+    clash = sorted({p for s in srcs for p in s if any(p in t and t[p] != s[p] for t in srcs)})
+    stale = [p for p, h in comps.items() if not ref_current(root, {"path": p, "sha256": h})]
+    for p in comps:
+        if not stale or p not in stale:
+            g.use(p)
+    g.add("Companion files current", not stale and not clash,
+          ("no companion declared" if not comps else f"companions {sorted(comps)}")
+          + (f"; not current: {stale}" if stale else "") + (f"; declared with different hashes: {clash}" if clash else ""))
+    return sorted(comps)
+
+
+ID_TOKEN = r"(?:[A-Z][A-Z0-9]*-[A-Z0-9]*\d+|-\d+)"
+STATUS_CLAIM_RE = re.compile(r"(?P<ids>" + ID_TOKEN + r"(?:\s*(?:,|and|&|or|,\s*and)\s*" + ID_TOKEN + r")*)\s+"
+                             r"(?:(?:is|are|was|were|has\s+been|have\s+been|now|marked|listed|recorded|treated|as)\s+){0,3}"
+                             r"(?P<word>resolved|closed|fixed)\b", re.IGNORECASE)
+NEGATED_RE = re.compile(r"\b(?:not|never|un)\s*(?:yet\s+)?$", re.IGNORECASE)
+CARRY_NEG_RE = re.compile(r"\b(?:does\s+not|do\s+not|not)\s+carr|\bomit|\bleaves?\s+out\b", re.IGNORECASE)
+
+
+def _expand_ids(chunk):
+    ids, prefix = [], None
+    for tok in re.findall(ID_TOKEN, chunk):
+        if tok.startswith("-"):
+            if prefix:
+                ids.append(prefix + tok[1:].zfill(2) if len(tok) <= 3 else prefix + tok[1:])
+        else:
+            ids.append(tok)
+            prefix = tok.rsplit("-", 1)[0] + "-"
+    return ids
+
+
+def status_claims(body):
+    """[(finding id, word, sentence)] where text calls a finding resolved, closed or fixed (e.g. "marks G4C-02, -04 and -07 as
+    resolved"; "G4C-11 is closed"). A negated statement ("is not resolved") is not a claim."""
+    out = []
+    for sent in re.split(r"(?<=[.;!?])\s+|\n+", body or ""):
+        for m in STATUS_CLAIM_RE.finditer(sent):
+            between = sent[m.end("ids"):m.start("word")]
+            if re.search(r"\bnot\b|\bnever\b|\byet\b", between, re.IGNORECASE):
+                continue
+            ids = _expand_ids(m.group("ids"))
+            if re.match(r"\s*(?:is|was|has\s+been)\b", between, re.IGNORECASE):
+                ids = ids[-1:]  # singular verb: only the last id is the subject ("..., and G4C-11 is closed")
+            for fid in ids:
+                out.append((fid, m.group("word").lower(), sent.strip()[:200]))
+    return out
+
+
+def status_word_checks(g, root, rels):
+    """Case02 change A5. (1) A deliverable or companion that calls a G4c finding resolved/closed/fixed must agree with the
+    sealed G4c review, where that finding must be closed. (2) Every finding the Stage 4 methodology triage disposes of as
+    carried to the Stage 5 disclosures must be carried: named in a deliverable or companion on a line that does not say it
+    is not carried."""
+    rv = _plain_at(root, G4C_REVIEW)
+    fnd = rv.get("findings") if isinstance(rv, dict) and isinstance(rv.get("findings"), list) else []
+    status = {f.get("id"): f.get("status") for f in fnd if isinstance(f, dict) and text(f.get("id"))}
+    if not status:
+        g.add("Finding status words match the G4c review", True, "no G4c review findings to compare")
+        return
+    g.use(G4C_REVIEW)
+    bodies = {r: _read_text(root, r) or "" for r in rels}
+    wrong = [f"{r}: {fid} called {w} but open in the G4c review" for r, b in bodies.items() for fid, w, _ in status_claims(b)
+             if status.get(fid) == "open"]
+    g.add("Finding status words match the G4c review", not wrong,
+          "a statement that a review finding is resolved/closed/fixed must match that finding's status in "
+          f"{G4C_REVIEW}" + (f"; mismatch: {wrong[:5]}" if wrong else ""))
+    s4 = _plain_at(root, R_STEP["G4d"][1]) or {}
+    mref = (s4.get("evidence_receipts") or {}).get("methodology") if isinstance(s4.get("evidence_receipts"), dict) else None
+    meth = _plain_at(root, mref["path"]) if ref_current(root, mref) else None
+    tri = meth.get("triage") if isinstance(meth, dict) and isinstance(meth.get("triage"), list) else []
+    carried = [t.get("id") for t in tri if isinstance(t, dict) and t.get("id") in status
+               and re.search(r"carried|disclos", str(t.get("disposition", "")), re.IGNORECASE)]
+    lines = [ln for b in bodies.values() for ln in b.splitlines()]
+    not_carried = []
+    for fid in carried:
+        idre = re.compile(r"(?<![\w-])" + re.escape(fid) + r"(?![\w-])")
+        if not any(idre.search(ln) and not _id_in_negated_carry(ln, fid) for ln in lines):
+            not_carried.append(fid)
+    if tri:
+        g.use(mref["path"])
+    g.add("Triage 'carried' findings carried in the report", not not_carried,
+          ("no triage receipt" if not tri else f"{len(carried)} G4c findings the triage carries to Stage 5")
+          + (f"; triage says carried but no deliverable or companion carries: {not_carried}" if not_carried else ""))
+
+
+def _id_in_negated_carry(line, fid):
+    """True when `fid` sits in the part of the line after a "does not carry" style phrase (up to the next ; or .)."""
+    for m in CARRY_NEG_RE.finditer(line):
+        tail = re.split(r"[;.]", line[m.end():], maxsplit=1)[0]
+        if re.search(r"(?<![\w-])" + re.escape(fid) + r"(?![\w-])", tail):
+            return True
+    return False
+
+
+def stage5_review_shape_checks(g, root):
+    """Case02 change A9: `uncovered_claims` is a list of claim ids ([] when none, never a note such as "nothing uncovered"),
+    and the two Stage 5 reviews use different finding ids (role prefixes SD5-, RR5- and X5- for cross review)."""
+    c = _plain_at(root, CLAIMS) or {}
+    cids = {x.get("id") for x in c.get("claims", []) if isinstance(x, dict)} if isinstance(c.get("claims"), list) else set()
+    bad, ids = [], {}
+    for rel in S5_REVIEWS:
+        rv = _plain_at(root, rel)
+        if not isinstance(rv, dict):
+            continue
+        uc = rv.get("uncovered_claims", [])
+        if not (isinstance(uc, list) and all(isinstance(u, str) and u in cids for u in uc)):
+            bad.append(f"{rel}: uncovered_claims {uc!r}")
+        for f in rv.get("findings", []) if isinstance(rv.get("findings"), list) else []:
+            if isinstance(f, dict) and text(f.get("id")):
+                ids.setdefault(f["id"], set()).add(rel)
+    g.add("Stage 5 uncovered_claims are claim ids", not bad,
+          "uncovered_claims: [] or a list of claim ids from the ledger; no notes" + (f"; bad: {bad}" if bad else ""))
+    clash = sorted(i for i, rs in ids.items() if len(rs) > 1)
+    g.add("Stage 5 finding ids distinct across reviews", not clash,
+          "each review prefixes its finding ids by role (SD5-, RR5-; X5- for cross review)" + (f"; used by both: {clash[:8]}" if clash else ""))
+
+
+def g5p(root, ledger=CLAIMS):
+    """G5P: the G5 claim and content checks on any claims ledger (e.g. a child's reply before placement). Writes nothing unless run
+    through gates.run with a record; no R, review or G4d checks. A clean G5P means these G5 checks will pass on the placed ledger."""
+    g = Gate("G5P", root)
+    c = g.load(ledger, "Claims ledger") or {}
+    dl = c.get("deliverables")
+    dl = dl if isinstance(dl, list) else []
+    dpaths = [x.get("path") for x in dl if isinstance(x, dict)]
+    g.add("Deliverables declared and current", bool(dl) and all(ref_current(root, x) for x in dl) and len(set(dpaths)) == len(dpaths),
+          "deliverables: [{path, sha256}] current, no duplicates")
+    claim_checks(g, root, c, dpaths)
+    finish_content_checks(g, root, dpaths)
+    comps = companion_checks(g, root, c, approval=None)
+    status_word_checks(g, root, [pth for pth in dpaths if text(pth)] + comps)
+    stale_nested_ref_checks(g, root, "finish")
     return g.result()
 
 
@@ -671,4 +1184,4 @@ def g6(root):
 
 
 GATES = {"G1": g1, "G2": g2, "G2F": g2f, "G3S": g3s, "G3K": g3k, "G3": g3, "G4a": g4a, "G4b": g4b, "G4c": g4c, "G4d": g4d,
-         "G5": g5, "G6": g6}
+         "G5": g5, "G5P": g5p, "G6": g6}

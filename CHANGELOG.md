@@ -2,6 +2,43 @@
 
 All notable changes to this design draft are recorded here. Dates are America/Chicago.
 
+## 0.4.0 — 2026-11-16
+
+Process changes from the fourth head-to-head case (no case content or answers). Lessons L21–L27 in docs/lessons.md.
+
+- **Stage close check (new, `gates/close.py`).** `python3 -m gates.close <closing gate> <root>` exits 0 only if the closing gate, every gate it depends on and G0 are PASS with current inputs, and no packet is sent but unanswered or captured but not promoted. A FAIL can no longer be sealed as closed. Standing rule 25.
+- **Captured replies (G0).** New packet status `captured`: every reply and derivability check runs, but the packet stays unanswered (and is listed in `captured`) until `python3 -m gates.packet promote <root> <id>` moves it to `answered` on a G0 PASS. Standing rule 26.
+- **Next stage's entry check at lock (G3).** Each fixture's worked answer is compared with itself by the G4a compare, every tolerance must have the G4a/G4b shape (no bare number), and output keys must be non-blank. Standing rule 27.
+- **Design version check (G3).** Versioned docs/stage3 files named by the locked design (deliverables, stage_records) must carry the design version (fixtures: the fixture version).
+- **Derivability.** `MISSING INPUT: none.` (any case, with or without a full stop) is not a missing input.
+- **Stage 5 companions and status words (G5P, G5).** Companion files (declared in the ledger or approval `companions`, or `companion <path> sha256 <hash>` in the approval text) must be current and are review subjects of both Stage 5 reviews. A report or companion that calls an open G4c finding resolved/closed/fixed fails, and every finding the Stage 4 triage disposes of as carried must be carried. Standing rule 28.
+- **Stage 5 review records (G5).** `uncovered_claims` is `[]` or claim ids; the two reviews may not share a finding id (role prefixes SD5-, RR5-, X5-). Standing rule 29.
+- **Stale nested references (G3, G5P, G5).** A `{path, sha256}` inside a sent JSON attachment that no longer matches must be resolved by an H1 historical-send record with an archived copy. Standing rule 30.
+- **Docs and code agree.** Thresholds accept `number` or `value` (both must agree when given); exposure sentences ("has been computed or seen") and `methodology.exposure` / `results_seen` are not read as rate bans; the owner_holds shape is in the Lead Designer role; the Stage 1 review mapping and the real Stage 5 order are in docs/stages.md, docs/gates.md and the reviewer roles.
+- Tests: `gates/tests/test_case03_changes.py` (47 tests). The base fixture's Stage 5 reviews now use role-prefixed ids.
+
+## 0.3.0 — 2026-11-15
+
+Process changes from the third head-to-head case (no case content or answers). Lessons L14–L20 in docs/lessons.md.
+
+- **G3 lock completeness.** G3 fails a locked design missing any Stage 3 field the R Workflow Gate reads at G4d (`ml_mode`, `fixture_version`, `fixture_ids`, `reconciliation_critical_fields`, `ranking_contract` under a hard attention budget, and the required core fields). G3 also requires `decision_thresholds` [{id, value, statement}] in the Grok design, and checks any `owner_holds` for an owner source and a decision output that keeps the rule's action beside the hold.
+- **G5 evidence numbers.** CSV/TSV evidence is read cell by cell; a row such as `x,6,3,0.5` no longer reads as one number.
+- **G5P precheck (new).** Runs exactly the G5 claim and content checks on any ledger (`ledger=`), before review and placement. G0 fails a Stage 5 Second Designer or Risk Reviewer packet that does not carry a precheck log.
+- **Per-claim deliverable check.** G5/G5P fail a claim whose `deliverable` is not one of the ledger's deliverables.
+- **Builder corrections log.** G4c checks `artifacts/stage4/corrections.json` (when present): each entry has old/new hash (new = current file), role, reason and time, and the log is a subject of the G4c review. Replaces unlock/re-freeze.
+- **Report content.** G5/G5P require each decision threshold as a number with its id on one deliverable line, and a triggered owner hold reported on the same line as the rule's action values and the hold id. The owner's stop test is unchanged; only its reporting is checked.
+- Docs: standing rules 18–24, stage notes, handoff additions, role text for all child roles and the parent. Fixture design declares `TH1`; the fixture decision deliverable states it.
+
+## 0.2.1 — 2026-11-10
+
+Process fixes from the second head-to-head case (no case content or answers). Lessons in docs/lessons.md.
+
+- **Public-file derivability check (new GD, also inside G0).** A role may stop on a missing input or mapping only after the public schema, brief and bundle files were checked. A reply that stops writes `MISSING INPUT: <item>`; a reply that settled it writes `DERIVED: <item> from <path>: <how>` and continues. The parent records each check in `artifacts/derivability.json`. GD/G0 fail an unchecked stop, a derivable item that did not continue, and a "not derivable" item when a public file mentions its search terms and the record does not explain why that file does not settle it. Only non-derivable items are escalated to the owner.
+- **Labeled descriptive rates allowed and expected.** New standing rule. G3 fails a design that bans rates or differences outright (a sentence that only restricts causal wording is fine). G5 fails a claim that states a rate or difference without a descriptive/associational label.
+- **Template placeholder references rejected early.** G0 rejects a packet input that is a template `*.example.json` or a JSON file holding placeholder references (all-zero or `NOT_SET` hashes), and G3 rejects them anywhere in the design files and the JSON files they reference, with a message naming the fix. Before this, only R `finalize` (evidence dependency closure) caught them, at the end of the run.
+- **Supersession in G0.** A packet row may be marked `superseded_by` (a packet in the index, no cycle), `superseded_reason` and `superseded_at`. It keeps its sealed hash but is no longer content-checked or counted as unanswered, so a replaced packet no longer blocks G6.
+- New module `gates/guards.py` (shared checks) and `gates/derivability.py`; regression tests in `gates/tests/test_finish_gates.py` and `gates/tests/test_stage_gates.py`. No R gate logic changed, so R-vs-Python parity is unaffected.
+
 ## 0.2.0 — 2026-11-10
 
 - Implemented and tested **G0 packet integrity** (`gates/packet.py`): every packet in `artifacts/packets/index.json` must keep its sealed hash once sent, carry every handoff field, list whole current inputs (hash and byte count, every part of a split input), take nothing from a forbidden or answer-key path, name the answer key under NOT ALLOWED TO SEE, contain no `TEMPLATE` text or unfilled placeholders, and require `ANSWERED <PACKET_ID>`. An answered packet needs a sealed reply whose last line is `ANSWERED <PACKET_ID>` and whose produced-files list is not blank and covers every expected output. A file on disk is not a completed send.
