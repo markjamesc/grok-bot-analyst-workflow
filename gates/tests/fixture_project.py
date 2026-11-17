@@ -81,11 +81,57 @@ def rj(root, rel):
 EXTRAS = {
     "stage1_decision.json": {"actions_per_result": [{"result": "above threshold", "action": "expand"},
                                                     {"result": "below threshold", "action": "hold"}],
-                             "limits": ["No causal claim", "Snapshot window only"]},
+                             "limits": ["No causal claim", "Snapshot window only"],
+                             "agreed_question": "Which active customers have a total order amount above 10 in the window?",
+                             "sources": [{"brief_quote": "Active customers only."},
+                                         {"statement": "ST1", "use": "fact"},
+                                         {"statement": "ST2", "use": "preference"}]},
     "stage2_framing.json": {"population": "Active customers", "metric": "Order amount per customer", "threshold": 10,
                             "window": {"start": "2026-01-01", "end": "2026-03-31"},
-                            "review_subjects": ["docs/stage2/FRAMING_RECORD.md"]},
+                            "review_subjects": ["docs/stage2/FRAMING_RECORD.md"],
+                            "sources": [{"brief_quote": "in the window 2026-01-01 to 2026-03-31"},
+                                        {"statement": "ST1", "use": "fact"},
+                                        {"statement": "ST3", "use": "clarification"}]},
 }
+
+# Synthetic live-Stakeholder conversation (gates/stakeholder.py). Written with the capture tool itself.
+BRIEF = ("Synthetic brief. Decide whether to expand to customers whose total order amount is above 10\n"
+         "in the window 2026-01-01 to 2026-03-31. Active customers only.\n")
+PERSONA = "Persona written from inputs/public/brief.md: head of customer growth; owns the expand decision.\n"
+CHAT1 = [("S1-M01", "stakeholder", "2026-11-09T09:00:00-06:00",
+          "Hi, I run customer growth. I need to decide whether to expand to customers whose total order amount is above 10."),
+         ("S1-M02", "lead", "2026-11-09T09:02:00-06:00", "Should we count only active customers?"),
+         ("S1-M03", "stakeholder", "2026-11-09T09:03:00-06:00",
+          "Yes, active customers only. For reporting I would prefer a monthly view, but the brief doesn't say."),
+         ("S1-M04", "owner", "2026-11-09T09:05:00-06:00", "Confirm Stage 1 as written, lock it.")]
+STATEMENTS1 = [("ST1", "S1-M01", "brief_fact", "expand to customers whose total order amount is above 10",
+                "expand to customers whose total order amount is above 10"),
+               ("ST2", "S1-M03", "preference", "For reporting I would prefer a monthly view", None)]
+CHAT2 = [("S2-M01", "stakeholder", "2026-11-09T10:00:00-06:00", "The framing reads clearly: one question, active customers."),
+         ("S2-M02", "owner", "2026-11-09T10:05:00-06:00", "Approved, lock the framing.")]
+STATEMENTS2 = [("ST3", "S2-M01", "clarification", "one question, active customers", None)]
+
+
+def add_conversation(root, stage, chat, statements, lock_capture, lock_quote, run_kind="live", label=None):
+    from gates import stakeholder as SH
+    if stage == "1":
+        SH.init(root, "1", "inputs/public/brief.md", "inputs/stakeholder/persona.md", run_kind)
+    else:
+        SH.init(root, "2", "inputs/public/brief.md", None, run_kind)
+    for cid, who, ts, body in chat:
+        SH.capture(root, stage, cid, who, ts, body.encode("utf-8"), label)
+    for sid, cid, kind, quote, bq in statements:
+        SH.statement(root, stage, sid, cid, kind, quote, bq)
+    if lock_capture:
+        SH.lock(root, stage, lock_capture, lock_quote)
+
+
+def add_live_stakeholder(root):
+    """Stages 1 and 2 as captured group chats: brief, persona, captures, statements and the owner locks."""
+    wt(root, "inputs/public/brief.md", BRIEF)
+    wt(root, "inputs/stakeholder/persona.md", PERSONA)
+    add_conversation(root, "1", CHAT1, STATEMENTS1, "S1-M04", "Confirm Stage 1 as written, lock it.")
+    add_conversation(root, "2", CHAT2, STATEMENTS2, "S2-M02", "Approved, lock the framing.")
 
 CSV_SUMMARY = "customer_id,total,n_orders\nc1,15.5,2\nc2,7,1\n"
 CSV_ORDERS = "id,customer_id,amount\n1,c1,10\n2,c1,5.5\n3,c2,7\n"
@@ -113,6 +159,7 @@ def add_stage2(root, pin_base):
     wj(root, "artifacts/workflow_pin.json", {"base": pin_base, "commit": "a331d6c", "files": [ref(pin_base, "docs/workflow.md")]})
     review(root, "artifacts/stage2/reviews/second_designer_critique.json", "second_designer", ["docs/stage2/FRAMING_RECORD.md"])
     review(root, "artifacts/stage2/reviews/risk_reviewer_framing_check.json", "risk_reviewer", ["docs/stage2/FRAMING_RECORD.md"])
+    add_live_stakeholder(root)
 
 
 def add_feasibility(root, feas="yes", extra_q=None):

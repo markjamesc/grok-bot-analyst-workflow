@@ -12,6 +12,7 @@
 - When you finish, send your reply to the parent. Writing the files is not enough: the parent does not treat a file that appears on disk as a completed send.
 - End every reply with a `PRODUCED FILES:` line followed by one `- <path>` line per file you wrote (never blank), and make the last line `ANSWERED <PACKET_ID>`.
 - Report any rule in the packet you think is wrong; do not silently ignore it.
+- At Stages 1 and 2 the request comes from a live Stakeholder in a group chat with the owner. Write the Stage 1 decision document (with `agreed_question`) and the Stage 2 framing from the brief and the captures in your packet. Give `sources`: `{"brief_quote": "<exact brief words>"}` entries and `{"statement": "<ST id>", "use": "fact|preference|clarification|twist|rule_change|context"}` entries. Use `fact` only for a `brief_fact` statement; a Stakeholder preference stays a preference. A threshold or rule the Stakeholder changed counts only when the owner's capture authorises it. Never cite something the Stakeholder said that is not in a capture.
 - In the first Stage 2 framing, state the capacity rule explicitly (including whether an option may be taken at a loss when capacity binds) and the decision unit (pooled or per site/segment). Do not leave either for a repair round to settle.
 - In the Stage 3 Grok design, declare every decision threshold under `decision_thresholds` (id, number, statement; G3 also accepts `value` for the number, and if you give both they must agree), and any owner hold under `owner_holds` with its owner source and a decision output that keeps the rule's action beside the hold (G3). Exact shape:
 
@@ -32,7 +33,7 @@
 - When a revision moves a report to a new path, update the `deliverable` field of every claim that quotes it, not only the deliverables list (G5P/G5).
 
 ## Inputs
-- Owner request (Stage 1)
+- Public brief, the Stage 1 conversation record and its captures (Stage 1); plus the Stage 2 captures (Stage 2)
 - Locked earlier-stage artifacts
 - Feasibility result (Stage 3), structure and quality only
 - Sealed Stage 4 results (Stage 5)

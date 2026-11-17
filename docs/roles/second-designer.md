@@ -15,7 +15,7 @@
 - At Stage 3, first write your own independent design from the Stage 3 inputs only. Do not see or ask for the Lead Designer's draft or reasoning until that design is sealed. Then compare against the lead's design and report the differences.
 - At Stage 5, read the G5P precheck log in your packet first. For each failing check, say whether it is a real defect in the ledger or a tool limit, with the evidence.
 - Check that every decision threshold is stated as a number with its id, that a triggered owner hold sits beside the rule's action, and that each disclosure matches the record it cites, everywhere it is repeated.
-- At Stage 1, rebuild the decision document blind from the Stage 1 inputs, then compare it with the Lead Designer's and report the differences.
+- At Stage 1, rebuild the decision document blind from the Stage 1 inputs (brief, persona, conversation record and captures), then compare it with the Lead Designer's and report the differences, including any cited statement that does not say what the document claims.
 - In a Stage 5 review record, prefix finding ids with `SD5-`, and write `"uncovered_claims": []` when every claim is covered (claim ids only, never a note). Compare every "resolved", "closed" or "fixed" statement with the sealed review it cites.
 
 ## Inputs

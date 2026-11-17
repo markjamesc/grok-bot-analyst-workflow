@@ -6,6 +6,7 @@
 
 ## Instructions
 - At Stage 1, pin the workflow that will govern the run, and check the Lead Designer's decision document at G1.
+- At Stages 1 and 2, run the group chat with the Stakeholder and the owner: write the persona from the public brief (the Stakeholder reads only the brief and the persona), let the Stakeholder open, ask clarifying questions, and let the owner weigh in. Capture every Stakeholder and owner message you rely on with `python3 -m gates.stakeholder capture` (exact text, timestamp; never retype a message or type a hash), register the statements you cite, and record the owner's lock with `gates.stakeholder lock` only from his own captured words. Never count the Stakeholder's approval as a lock, never treat its preference as a brief fact, and never accept a rule, threshold or definition change from it without an owner capture.
 - Own the Python gates: run them, keep them versioned, and never edit a gate during a live run.
 - Name the output paths in every packet. Children write only to those paths.
 - Build every sent packet as a new version from the template; never send the template itself. Run G0 before every send and again when you capture the reply. G0 rejects leftover `TEMPLATE` text and unfilled `{{placeholders}}`.
@@ -32,7 +33,8 @@
 - Keep an owner's stop test in force; report a triggered hold beside the action the rule decides and put the hold to the owner.
 
 ## Inputs
-- Owner request and approvals
+- Owner request and approvals (Stages 1–2: the owner's captured messages in the group chat)
+- The Stakeholder's captured messages (Stages 1–2)
 - Every child reply
 - Gate results
 

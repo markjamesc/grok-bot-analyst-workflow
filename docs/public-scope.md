@@ -9,7 +9,7 @@ This design is intended for a **public** repository. Publish only the workflow m
 - Hashes of live case files (hashes of *this* method-repo's own files, as in the draft manifest, are fine)
 - Account names, emails, personal profile links, or private bot identifiers
 - Local paths of private files
-- Raw captures, chat logs, or operator notes that could reveal a case or a key
+- Raw captures, chat logs, or operator notes that could reveal a case or a key, including real Stakeholder chat captures and personas written for a real case
 - A LICENSE file. The owner holds the copyright; no license is granted.
 
 ## What belongs here

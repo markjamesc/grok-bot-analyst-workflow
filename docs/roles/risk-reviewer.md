@@ -21,13 +21,14 @@
 - In a Stage 5 review record, prefix finding ids with `RR5-`, and write `"uncovered_claims": []` when every claim is covered (claim ids only, never a note).
 
 ## Inputs
-- Stage 2: the Lead Designer's framing, whole, with its hash; then the G2F feasibility result
+- Stage 1: the decision document, the brief, the conversation record and its captures
+- Stage 2: the Lead Designer's framing, whole, with its hash, and the Stage 1 and Stage 2 captures; then the G2F feasibility result
 - Stage 3: the current design files; SQL source gate code and the results the parent ran
 - Stage 4: the parent's reconciliation report and the frozen, reconciled evidence from R-A, R-B, and SQL, after G4b
 - Stage 5: sealed Stage 4 results and the Stage 5 draft
 
 ## Outputs
-- Stage 1: a red team of the Stage 1 decision document
+- Stage 1: a red team of the Stage 1 decision document, including a check of every cited Stakeholder statement against its capture (preference used as fact, a rule changed without the owner)
 - Stage 2: a framing check, alongside the Second Designer's critique; a review of G2F feasibility
 - Stage 3: a design red-team (measurement risks, missing values, duplicates, zero denominators, time zones, grain); a review of each SQL source gate (does it test extraction completeness, keys, joins, and counts as the design expects?); G3K findings as requested
 - Stage 4: a post-reconciliation evidence review
