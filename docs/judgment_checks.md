@@ -3,7 +3,7 @@ name: judgment-checks
 description: Lead Designer, Second Designer and Risk Reviewer. Load before writing or reviewing any framing, design, claim, disclosure or review verdict. Author steps run after drafting and before replying; reviewer steps find where the author skipped them.
 ---
 
-# Judgment checks (v01, owner-approved 2026-11-16; first live check is case03)
+# Judgment checks (v02: owner-approved 2026-11-16; severity rule loosened; first live check is case03)
 
 ## Why this exists
 Most slips in our runs were not arithmetic. They were calls made from memory: a status word nobody re-opened, a definition that let one record be read two ways, a required item lost while text moved, a reviewer who rated a real defect as advisory. Re-reading your own draft rarely finds these. Opening the record does. So every check below asks you to open something and quote it, not to think harder.
@@ -38,7 +38,7 @@ R5. **Edges.** Try the largest value, mixed, blank, tie and repeat cases against
 R6. **Grades.** Find any grade above its weakest support, or evidence counted in the wrong category.
 R7. **Self-check block.** Missing, or any line without evidence, is a finding.
 
-**Severity rule.** must_fix if the slip could leave a claim, status, definition, rule or required item wrong in what gets locked or delivered, including any R1-R6 miss. advisory only for wording that changes nothing a reader would act on. If you are unsure, use must_fix and say why. Rating a real defect as advisory has been our most common reviewer slip.
+**Severity rule.** must_fix if the slip would leave a claim, number, status, definition, rule, disclosure or required item wrong in what gets locked or delivered, so that the owner or a later stage would act differently. advisory for a real gap that changes nothing anyone would act on (for example a paraphrase that keeps the meaning, or a missing breakdown when the total is already backed by a record); give one line saying why it changes nothing. If you are unsure, ask that one question: would anyone act differently if this stayed? Yes, or the records can't tell you, means must_fix, and name the action that changes. No means advisory. Rating a real defect as advisory has been our most common reviewer slip, so a wrong number, status word, owner or grade, or a missing or dropped disclosure is always must_fix.
 
 **Accept rule.** Do not accept until you have done R2 and R3 yourself and listed what you opened. "No findings" must name the records checked.
 
