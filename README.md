@@ -1,6 +1,6 @@
 # Grok Bot analyst workflow (design draft)
 
-This folder is the design of a Grok Bot team version of a five-stage analyst workflow. A parent bot orchestrates; six child bots take named roles. It is published as a **public method repository**, a portable workflow design, not a case archive.
+This folder is the design of a Grok Bot team version of a five-stage analyst workflow. A parent bot orchestrates; seven child bots take named roles (the Stakeholder only in Stages 1–2). It is published as a **public method repository**, a portable workflow design, not a case archive.
 
 A later push to `main` still needs a separate, single owner approval.
 
@@ -21,6 +21,7 @@ Every bot in this version is a Grok Bot, so they share one model family. Separat
 | Role | Who | Job |
 |---|---|---|
 | Parent | Data Analysis and Coding bot | Orchestrates, pins the workflow, packs and seals work, runs gates, reconciles outputs, escalates. Does not author analysis or interpretation. |
+| Stakeholder | Child bot | Stages 1–2 only. Plays the business person in a group chat with the owner and the parent: opens the case, answers clarifying questions from the brief, reacts to the framing. Reads only the public brief and a persona written from it; never locks anything. |
 | Lead Designer | Child bot | Writes the Stage 1 decision document, drafts Stages 2–3, and writes the Stage 5 write-up. |
 | Second Designer | Child bot | Writes an independent Stage 3 design before seeing the lead's, then compares; also Stage 2 critique and Stage 5 inference review. |
 | Risk Reviewer | Child bot | Checks framing at Stage 2, red-teams the design at Stage 3, reviews source gates and post-reconciliation evidence, and audits every number at Stage 5. |
@@ -32,8 +33,8 @@ Role instructions: [docs/roles/](docs/roles/). **Stage 5 reuses these existing b
 
 ## Stages
 
-1. **Start** — the Lead Designer writes the Stage 1 decision document; the parent pins the workflow and checks it at G1.
-2. **Framing** — turn the decision into one precise, locked question.
+1. **Start** — a live conversation in a group chat: the Stakeholder opens, the parent asks clarifying questions, the owner weighs in; every message relied on is captured exactly. The Lead Designer writes the Stage 1 decision document (agreed decision and question) from the brief and the captures; the owner locks it in his own words; the parent pins the workflow and checks it at G1.
+2. **Framing** — turn the decision into one precise question, talked through with the Stakeholder in the same group chat and locked by the owner in his own words.
 3. **Design** — lock how the question will be measured and tested. A **data-feasibility gate** sits between Stage 2 and Stage 3. In Stage 3 the SQL Analyst writes the SQL source gates; the parent runs them.
 4. **Execution** — write and check the code (R-A, R-B, and SELECT-only SQL on the frozen hashed snapshot). The parent reconciles SQL against R; the Risk Reviewer then checks the reconciled evidence.
 5. **Finish** — interpret the sealed results and recommend an action. Scoring happens only after the freeze, by someone who was not a live role.
@@ -65,6 +66,7 @@ These are design requirements for this draft. Items 1, 8 and 9 have Python gate 
 - **A recorded split is not a guarantee of independent errors.**
 - **Check public files before stopping.** A missing input or mapping is checked against the public schema, brief and bundle files first; derivable items are recorded and the work continues; only non-derivable items stop and go to the owner (GD, inside G0).
 - **Descriptive rates are allowed and expected**, labeled descriptive or associational, not causal. No blanket "no rates" rule (G3, G5).
+- **Live Stakeholder (Stages 1–2).** The request is a captured back-and-forth with a Stakeholder role and the owner. Captures are exact and write-once; the framing cites them with the brief; a preference is never a fact; only the owner changes a rule or locks a stage (G1, G2; standing rules 31–36). Freeze counts restarted at zero with the first case run this way.
 - **No template placeholders in evidence** (G0 at send, G3 at the design lock), and **replaced packets are marked superseded** in the packet index (G0).
 
 ## Run cap (head-to-head test)
@@ -84,7 +86,7 @@ The owner holds the copyright to this design. No license is granted, and no LICE
 | [docs/gates.md](docs/gates.md) | Gate list and what each one decides |
 | [docs/handoff.md](docs/handoff.md) | Packet format between parent and children |
 | [docs/comparison.md](docs/comparison.md) | Scoring protocol vs the single-ChatGPT version |
-| [docs/roles/](docs/roles/) | One file per bot |
+| [docs/roles/](docs/roles/) | One file per bot (including the Stakeholder) |
 | [docs/lessons.md](docs/lessons.md) | How persistent lessons are recorded |
 | [docs/public-scope.md](docs/public-scope.md) | What must never go in this public repository |
 | [docs/rules.md](docs/rules.md) | Standing operating rules |
@@ -97,6 +99,7 @@ The owner holds the copyright to this design. No license is granted, and no LICE
 This is design documentation plus the Python gate implementation.
 
 - **Implemented and tested:** G0 (packet integrity), G1, G2, G2F, G3S (SQLite engine only), G3K, G3, G4a, G4b, G4c, G4d, G5 (claims), G6 (certificate), GD (public-file derivability) and GP (assembly regression), plus the repair cap (3, then escalate). G1, G2, G3, G4d and G5 include ported R stage checks, and G4d includes the whole ported R Workflow Gate; those ports pass R-vs-Python parity on the R repo's own test suites and on the gate fixtures. G6 requires the R Procedure Gate `finalize` certificate and re-checks every hash it recorded. G0 has no R counterpart. Tests use synthetic data only.
+- G1 and G2 also check the live Stakeholder conversation (`gates/stakeholder.py`, which is also the capture tool).
 - G3S runs on SQLite only; other engines need an executor (otherwise TOOL_ERROR).
 - No workflow has been started from these gates yet.
 

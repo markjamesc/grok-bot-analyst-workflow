@@ -12,7 +12,8 @@ and on the gate fixtures.
 | G0 Packet integrity | Implemented, tested | `packet.g0` | none (no R counterpart: the R gate has no packet format) | good path + 17 faults + supersession (3), template-input and derivability (2) tests + captured/promote (5) and "MISSING INPUT: none." (2) tests (`test_case03_changes.py`) |
 | GD Public-file derivability | Implemented, tested | `derivability.gd` (also run inside G0) | none (no R counterpart) | Case-C-style regression + 2 faults + nothing-raised path |
 | G1 Decision | Implemented, tested | `stage_gates.g1` | R `complete start` checks (validate_stage_receipt + operations ledger + closure) | good path + 5 faults |
-| G2 Question lock | Implemented, tested | `stage_gates.g2` | R `complete framing` checks | good path + 6 faults |
+| G2 Question lock | Implemented, tested | `stage_gates.g2` | R `complete framing` checks | good path + 6 faults; Stage 2 conversation checks (`test_live_stakeholder.py`) |
+| Live Stakeholder conversation (inside G1 and G2) | Implemented, tested | `stakeholder` (checks and the capture tool) | none (no R equivalent) | good path + planted failures and tool refusals (`test_live_stakeholder.py`) |
 | G2F Feasibility | Implemented, tested | `stage_gates.g2f` | none (no R equivalent) | good path + 6 faults |
 | G3S SQL source-gate runner | Implemented, tested (sqlite engine only) | `stage_gates.g3s`, `sql_select_only` | none (no R equivalent) | good path + 6 faults + authorizer + TOOL_ERROR |
 | G3K Early key/count checks | Implemented, tested | `stage_gates.g3k`, `repair` | none (no R equivalent) | good path + 4 faults + 3 repair-cap tests |
@@ -37,6 +38,7 @@ python3 -m gates.run <GATE_ID> <project_root>        # exit 0 PASS, 1 FAIL, 2 TO
 python3 -m gates.run G5P <project_root> --ledger=<claims json>   # precheck any ledger before review or placement
 python3 -m gates.close <CLOSING_GATE> <project_root>  # exit 0 only if the stage may be sealed closed (G1 G2 G2F G3 G4d G5 G6)
 python3 -m gates.packet promote <project_root> <packet id>   # captured -> answered, only on a G0 PASS
+python3 -m gates.stakeholder init|capture|statement|lock <project_root> --stage 1|2 ...   # live Stakeholder chat (docs/handoff.md)
 python3 -m gates.workflow_gate <project_root> [--dry-run]
 GATES_FRAMEWORK_ROOT=<R repo> python3 -m gates.procedure start|begin|complete|status|finalize|amend|successor <root> ...
 python3 -m gates.assembly <project_root> <split.json> [--report-only]
@@ -51,8 +53,8 @@ input still has the recorded hash** ("PASS by hash").
 
 | Gate | Files |
 |---|---|
-| G1 | `artifacts/stage1_decision.json` (R Stage 1 receipt plus `actions_per_result` [>=2 {result, action}], `limits` [text]); `artifacts/workflow_pin.json` {base, commit, files[{path, sha256}]}; R `artifacts/operations/start.json` |
-| G2 | `artifacts/stage2_framing.json` (R Stage 2 receipt plus one `analytical_question`/`question_id`, `population`, `window` {start, end}, `metric`, `threshold`, `review_subjects`); `artifacts/stage2/reviews/second_designer_critique.json`, `risk_reviewer_framing_check.json` |
+| G1 | `artifacts/stage1_decision.json` (R Stage 1 receipt plus `actions_per_result` [>=2 {result, action}], `limits` [text]); `artifacts/workflow_pin.json` {base, commit, files[{path, sha256}]}; R `artifacts/operations/start.json`; Stage 1 receipt also `agreed_question` and `sources` [{brief_quote} or {statement, use} or {capture, quote, use}]; `artifacts/stage1/conversation.json` {stage, run_kind live/rehearsal, brief, persona, stakeholder_inputs, capture_dir, captures[{id, speaker stakeholder/owner/lead, timestamp, path, sha256}], opening, statements[{id, capture, kind, quote, brief_quote?, authorized_by?}]}; `captures/stage1_chat/<id>.txt` + `SHA256SUMS`; `artifacts/stage1_owner_lock.json` {stage, subject {path, sha256}, conversation, capture, quote} |
+| G2 | `artifacts/stage2_framing.json` (R Stage 2 receipt plus one `analytical_question`/`question_id`, `population`, `window` {start, end}, `metric`, `threshold`, `review_subjects`); `artifacts/stage2/reviews/second_designer_critique.json`, `risk_reviewer_framing_check.json`; framing `sources`; the Stage 1 record and `artifacts/stage2/conversation.json` with `captures/stage2_chat/`; `artifacts/stage2_owner_lock.json` |
 | G2F | `artifacts/stage2f_feasibility.json` {questions[{question_id, feasibility yes/partly/no, reason, structure[], quality[]}], owner_decision if partly/no}; `artifacts/stage2f/reviews/risk_reviewer_feasibility.json`; current G2 record |
 | G3S | `artifacts/stage3/source_gates/manifest.json` {database {engine: sqlite, snapshot {path, sha256}}, gates[{id, check, sql {path, sha256}}]}; each query returns violating rows (PASS = 0 rows); results written write-once under `artifacts/stage3/source_gates/results/` |
 | G3K | `artifacts/stage3_grok_design.json` `early_checks` {keys[{id, table, columns}], counts[{id, table, expected_rows}]}; `artifacts/repairs.json` |

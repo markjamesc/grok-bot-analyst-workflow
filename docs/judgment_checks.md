@@ -11,7 +11,7 @@ Most slips in our runs were not arithmetic. They were calls made from memory: a 
 This skill does not replace gates, prechecks or your role rules. If they disagree, your role rules and the packet win; say so in your reply.
 
 ## Words used here
-- **Record**: a file on your INPUTS or ALLOWED TO SEE list (a sealed review, gate log, locked design, approval, ledger, brief).
+- **Record**: a file on your INPUTS or ALLOWED TO SEE list (a sealed review, gate log, locked design, approval, ledger, brief, or a Stakeholder or owner chat capture). A Stakeholder preference or a "the brief doesn't say" answer is a record of a preference, not of a fact.
 - **Claim**: any sentence in your output that states a fact, a status, a grade, a cause or a judgment.
 - **Status word**: resolved, closed, open, PASS, FAIL, confirmed, clean, accepted, locked, none.
 - **Required item**: every requirement, owner hold, owner limit, carried advisory, fix-request line and required disclosure handed to you.

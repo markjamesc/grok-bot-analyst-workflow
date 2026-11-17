@@ -3,6 +3,7 @@
 | File | Role |
 |---|---|
 | [parent.md](parent.md) | Parent (orchestrator). Pins the workflow at Stage 1; owns and runs Python gates; runs the SQL source gates (G3S). |
+| [stakeholder.md](stakeholder.md) | Stakeholder (Stages 1–2 only: plays the business person in the group chat with the owner and the parent; reads only the public brief and its persona; never locks) |
 | [lead-designer.md](lead-designer.md) | Lead Designer |
 | [second-designer.md](second-designer.md) | Second Designer |
 | [risk-reviewer.md](risk-reviewer.md) | Risk Reviewer (Stages 2–5: framing, red-team, source gates, post-reconciliation evidence, numbers audit) |

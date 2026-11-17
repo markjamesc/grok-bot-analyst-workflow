@@ -2,6 +2,17 @@
 
 All notable changes to this design draft are recorded here. Dates are America/Chicago.
 
+## 0.5.0 — 2026-11-16 (draft, not merged)
+
+Owner-approved process change: a live Stakeholder for Stages 1 and 2 (lesson L28). Stages 3, 4 and 5 are unchanged.
+
+- **Stakeholder role (new, docs/roles/stakeholder.md).** Plays the business person in a group chat with the owner and the parent, in Stages 1 and 2 only. Reads only the public brief and a persona the parent writes from it. Never approves a lock, never changes a rule, never does the analysis. Standing rule 32.
+- **Stage 1 and Stage 2 run as a conversation.** The Stakeholder opens, the parent asks clarifying questions, the owner weighs in or adds twists; the Lead Designer writes the decision document (`agreed_question`) and the framing from the brief and the captures; the owner locks each in his own words (docs/stages.md).
+- **Exact captures (new tool `python3 -m gates.stakeholder`).** init, capture, statement, lock. One write-once, read-only file per message under `captures/stage<N>_chat/`, sha256 from the file, `SHA256SUMS` regenerated from the files, conversation record `artifacts/stage<N>/conversation.json`, owner locks `artifacts/stage<N>_owner_lock.json` bound to the exact decision-document or framing hash. Standing rule 31.
+- **G1 and G2 check the conversation.** Capture integrity, Stakeholder isolation, Stakeholder opening/participation, statements in captures, preference never a brief fact, rule/threshold/definition changes only with an owner capture, Stakeholder numbers traced to the brief, `sources` citing the brief and the captures, framing threshold traced, owner-only locks (Stakeholder approval never counts). Standing rules 33–35.
+- **Freeze counts restart at zero** with the first case run this way (standing rule 36).
+- Tests: `gates/tests/test_live_stakeholder.py`. The base fixtures now carry a synthetic captured conversation, so every existing good path still passes.
+
 ## 0.4.0 — 2026-11-16
 
 Process changes from the fourth head-to-head case (no case content or answers). Lessons L21–L27 in docs/lessons.md.

@@ -50,6 +50,23 @@ MISSING INPUT: <item>
 - List the public schema, brief and bundle files as inputs in every packet that might need them, so a child can derive a value meaning or a mapping instead of stopping.
 - Never attach a template JSON (`*.example.json`) or any JSON with placeholder references as an input. Attach the adapted, real file or a prose summary (G0).
 
+## Live Stakeholder chat (Stages 1 and 2)
+The Stakeholder gets no packet. It is briefed with exactly two files, the public brief and the persona the parent writes from it, and speaks only in the group chat with the owner and the parent. The parent records the chat with the capture tool, never by hand:
+
+```text
+python3 -m gates.stakeholder init <root> --stage 1 --brief <brief> --persona <persona> --run-kind live
+python3 -m gates.stakeholder capture <root> --stage 1 --id S1-M01 --speaker stakeholder --timestamp <ISO with zone> --text-file <exact chat text>
+python3 -m gates.stakeholder statement <root> --stage 1 --id ST1 --capture S1-M01 --kind brief_fact --quote "<exact words>" --brief-quote "<brief line>"
+python3 -m gates.stakeholder lock <root> --stage 1 --capture <owner capture id> --quote "<owner's lock words>"
+```
+
+- The text file holds the message exactly as it appears in the chat (copied from the chat record, not retyped). The tool writes `captures/stage<N>_chat/<id>.txt` once, read-only, computes its sha256 and regenerates `SHA256SUMS`.
+- Capture the Stakeholder's and the owner's messages the stage relies on (the parent's own questions may be captured too, speaker `lead`).
+- Register only statements you will cite; a statement's quote must be in its capture. Kinds: `brief_fact` (with the brief line), `preference`, `clarification`, `twist`, `rule_change` (owner's words, or `--authorized-by <owner capture> --authorized-quote <words>`).
+- Run the lock command only after the owner's own lock message is captured, and after the decision document (Stage 1) or framing (Stage 2) is final; the lock binds that file's hash.
+- A rehearsal uses `--run-kind rehearsal` and `--label "REHEARSAL MOCK"` on every capture.
+- Stage 1 and Stage 2 packets to the Lead Designer, Second Designer and Risk Reviewer list the conversation record and every capture as inputs (whole, with hashes), alongside the brief.
+
 ## Stage 3 packets for the Second Designer
 - First packet: Stage 3 inputs only. Do not include the Lead Designer's draft or reasoning.
 - After the Second Designer's independent design is sealed, send a second packet with the lead's design so the Second Designer can compare and report differences.

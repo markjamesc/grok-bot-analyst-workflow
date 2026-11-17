@@ -19,6 +19,7 @@ from decimal import Decimal, InvalidOperation
 from gates import methodology as M
 from gates import procedure as P
 from gates import guards, reconcile, repair, sql_select_only
+from gates import stakeholder as SH
 from gates import workflow_gate as WG
 from gates.common import (FAIL, PASS, Gate, ToolError, approval_ok, gate_record_current, ref_current, ref_of,
                           review_checks, safe_rel, sha256_file, text, write_once)
@@ -88,7 +89,16 @@ def g1(root):
                 stale.append(f.get("path") if isinstance(f, dict) else f)
     g.add("Workflow pinned by the parent", ok and not stale and text((pin or {}).get("commit")),
           "workflow_pin.json: base, commit, files[{path, sha256}] all current" + (f"; stale: {stale}" if stale else ""))
+    stage1_conversation_checks(g, d)
     return g.result()
+
+
+def stage1_conversation_checks(g, d):
+    """Stage 1 runs as a captured group chat with the Stakeholder (gates/stakeholder.py; docs/rules.md 31-36)."""
+    g.add("Agreed question written up", text(d.get("agreed_question")), "agreed_question: the question the chat settled, in plain words")
+    conv = SH.conversation_checks(g, "1")
+    ts = SH.source_checks(g, "Decision document", d.get("sources"), [conv] if conv else [], conv.brief_text if conv else "")
+    SH.lock_checks(g, "1", conv, ts)
 
 
 # ------------------------------------------------------------------------------------------------ G2 question lock
@@ -111,7 +121,33 @@ def g2(root):
     g.add("Review subjects declared", bool(subj), "review_subjects: framing files the reviewers must receive")
     review_checks(g, "artifacts/stage2/reviews/second_designer_critique.json", "second_designer", subj, "Second Designer critique")
     review_checks(g, "artifacts/stage2/reviews/risk_reviewer_framing_check.json", "risk_reviewer", subj, "Risk Reviewer framing check")
+    stage2_conversation_checks(g, f)
     return g.result()
+
+
+def stage2_conversation_checks(g, f):
+    """Stage 2 also runs as a captured group chat (owner scope 2026-11-16): the framing cites the brief and the Stage 1
+    or Stage 2 captures, its threshold traces to the brief or an owner-authorised change, and the owner locks it."""
+    c1 = SH.conversation_checks(g, "1")
+    c2 = SH.conversation_checks(g, "2")
+    convs = [c for c in (c1, c2) if c]
+    brief = c1.brief_text if c1 else (c2.brief_text if c2 else "")
+    if c1 and c2:
+        g.add("Stage 2 chat: same brief as Stage 1", c1.rec.get("brief") == c2.rec.get("brief"), "brief {path, sha256} equal in both records")
+    ts = SH.source_checks(g, "Framing", f.get("sources"), convs, brief)
+    allowed = SH.numbers(brief)
+    for c in convs:
+        for s in c.statements.values():
+            if s.get("kind") in ("rule_change", "twist") and SH._in(s.get("quote"), c.bodies.get(s.get("capture"))) \
+                    and SH._authorized(c, s):
+                allowed |= SH.numbers(s.get("quote"))
+    th = f.get("threshold")
+    th_nums = SH.numbers(json.dumps(th) if not isinstance(th, str) else th)
+    extra = sorted(th_nums - allowed)
+    g.add("Framing threshold traced to the brief or an owner capture", bool(th_nums) and not extra,
+          "every threshold number is in the brief or in an owner-authorised rule_change/twist statement"
+          + (f"; untraced: {extra}" if extra else ""))
+    SH.lock_checks(g, "2", c2, ts)
 
 
 # ------------------------------------------------------------------------------------------------ G2F feasibility

@@ -2,10 +2,28 @@
 
 Each step is: parent packs → child works → parent captures and seals → gate. A failed gate goes back to the owning stage.
 
+## Stage 1 and Stage 2 conversation (live Stakeholder, owner-approved 2026-11-16)
+
+Stages 1 and 2 assume the work is requested by a real person, back and forth. The Stakeholder (a child role, docs/roles/stakeholder.md) plays the business person in a group chat with the owner and the parent. Child-bot packets and reviews stay one to one; only the Stakeholder conversation happens in the group chat.
+
+1. **Persona.** The parent writes a one-paragraph persona from the public brief (job title, the decision owned, what matters). The Stakeholder reads only the brief and the persona.
+2. **Stakeholder opens.** The Stakeholder opens the case in its own words: the decision, any deadline, the data it hands over.
+3. **Clarifying questions.** The parent asks clarifying questions. The Stakeholder answers from the brief, says "the brief doesn't say" when it is silent, and labels any business preference as a preference.
+4. **The owner weighs in.** The owner may comment, decide a point, or add a twist (a changed deadline, a new question, a changed rule). Only the owner can change the brief's decision rule, thresholds or definitions.
+5. **Capture.** Every Stakeholder and owner message the stage relies on is captured exactly, with its timestamp, by `python3 -m gates.stakeholder capture` into `captures/stage1_chat/` (Stage 2: `captures/stage2_chat/`): one write-once file per message, chmod a-w, its sha256 computed from the file and `SHA256SUMS` regenerated from the files. No hash is typed by hand. The parent registers each statement it relies on (`gates.stakeholder statement`: capture id, exact quote, kind `brief_fact`, `preference`, `clarification`, `twist` or `rule_change`).
+6. **Write-up.** The Lead Designer writes the Stage 1 decision document: the agreed decision and the agreed question in plain words (`agreed_question`), with `sources` that cite brief quotes and the registered statements. The Second Designer and Risk Reviewer review it with the captures as inputs.
+7. **Owner lock.** The owner locks the agreed decision and question in his own words in the chat. The parent captures that message and binds it to the exact decision-document hash (`gates.stakeholder lock`, `artifacts/stage1_owner_lock.json`). The Stakeholder's "looks good" is business feedback and never a lock.
+8. **Stage 2 (framing).** The Lead Designer drafts the precise framing from the brief and the Stage 1 captures. The parent shares it in the group chat; the Stakeholder reacts as a business reader and the owner weighs in, captured into the Stage 2 record. The framing's `sources` cite brief quotes and Stage 1 or Stage 2 statements, its threshold traces to the brief or an owner-authorised change, and the owner locks the exact framing hash in his own words (`artifacts/stage2_owner_lock.json`). The Second Designer critique and Risk Reviewer framing check are unchanged.
+
+G1 and G2 check all of this (docs/gates.md). The R receipt fields `stakeholder_confirmation` (Stage 1) and `stakeholder_approval` (Stage 2) record the Stakeholder's business sign-off only; `human_analyst_approval` is backed by the captured owner lock.
+
+**Freeze counts restart at zero.** The live Stakeholder changes the Stage 1 and Stage 2 inputs, so every stage's clean-in-a-row count toward the workflow freeze restarts at zero with the first case run this way (planned: case03). Counts from earlier cases do not carry over.
+
+
 | Stage | Author | Reviewers | Gate | Owner touchpoint |
 |---|---|---|---|---|
-| 1 Start | Lead Designer (decision document) | — (parent pins the workflow and checks it at G1) | G1 decision | None unless the decision is unclear |
-| 2 Framing | Lead Designer | Second Designer, Risk Reviewer | G2 question lock | Approve the locked question |
+| 1 Start | Group chat: Stakeholder, owner, parent (conversation, captured); Lead Designer (decision document from the brief and the captures) | Second Designer (blind rebuild), Risk Reviewer (red team); parent pins the workflow and checks it at G1 | G1 decision (incl. the Stage 1 conversation checks) | In the group chat: weighs in, may add twists; locks the agreed decision and question in his own words |
+| 2 Framing | Lead Designer (framing from the brief and the captures); group chat: Stakeholder reacts, owner weighs in (captured) | Second Designer, Risk Reviewer | G2 question lock (incl. the Stage 2 conversation checks) | Locks the exact framing in his own words in the group chat |
 | 2→3 Feasibility | SQL Analyst | Risk Reviewer | G2F feasibility | Only on `partly` / `no` |
 | 3 Design | Lead Designer; SQL Analyst (source gates) | Second Designer (independent design, then compare), Risk Reviewer (red-team and source-gate review) | G3S SQL source gates, G3K early key/count checks, G3 design lock | Approve the exact design hash |
 | 4 Execution | R-A, R-B, SQL Analyst (also writes the extract) | Risk Reviewer (post-reconciliation evidence) | G4a fixtures, G4b reconciliation, G4c post-reconciliation review, G4d release | Only after 3 failed repairs or a changed decision |
@@ -27,8 +45,8 @@ Each step is: parent packs → child works → parent captures and seals → gat
 - **Stage 4 extract and corrections.** The SQL Analyst writes the extract; the parent never writes it. A builder that must correct its own file before send logs it in `artifacts/stage4/corrections.json` (old and new hash, role, reason, time); the Risk Reviewer reviews that log at G4c. No unlock and re-freeze.
 - **Stage 5 precheck.** Each Stage 5 ledger is prechecked with G5P before it goes to review and again before placement; the latest precheck log goes into every Stage 5 review packet. A revision brief that changes a report path asks for each claim's `deliverable` to be updated.
 - **Stage 5 report content.** Every decision threshold appears as a number with its design id. A triggered owner hold is reported beside the action the rule decides (rule action + hold id on one line), and is put to the owner; the hold is never dropped and never replaces the rule's action. Disclosures say what the record says, and a corrected disclosure is swept through every ledger field that repeats it.
-- Stages 1–2 never see data values. Feasibility sees structure and quality only, not values or the answer key, and cannot add or reshape questions.
-- Stage 1 reviews (owner-approved Grok mapping): the Lead Designer writes the Stage 1 decision document; the Second Designer rebuilds it blind from the same inputs and then compares the two; the Risk Reviewer red-teams it. The parent pins the workflow and checks it at the start gate G1. Stage 1 packets cite this mapping by name ("Stage 1 reviews, docs/stages.md").
+- Stages 1–2 never see data values. The Stakeholder does not discuss data values in the chat, even when the brief carries an inline dataset. Feasibility sees structure and quality only, not values or the answer key, and cannot add or reshape questions.
+- Stage 1 reviews (owner-approved Grok mapping): the Lead Designer writes the Stage 1 decision document from the brief and the Stage 1 captures; the Second Designer rebuilds it blind from the same inputs (brief, persona, conversation record and captures) and then compares the two; the Risk Reviewer red-teams it, including whether each cited statement says what the document claims. The parent pins the workflow and checks it at the start gate G1. Stage 1 packets cite this mapping by name ("Stage 1 reviews, docs/stages.md").
 - At Stage 2, the Second Designer critiques the Lead Designer's framing and the Risk Reviewer checks that framing alongside it. The Risk Reviewer also reviews G2F feasibility.
 - At Stage 3, the Second Designer first writes its own independent design from the Stage 3 inputs, without seeing the Lead Designer's draft or reasoning. After that design is sealed, the parent sends the lead's design so the Second Designer can compare and report differences. The Risk Reviewer red-teams the design.
 - Also at Stage 3, the SQL Analyst writes the SQL source gates (G3S: extraction completeness, keys, joins, counts) against the design; the parent runs them; the Risk Reviewer reviews them. G3K remains the parent-owned Python early key/count checks. G3S and G3K must PASS before G3 locks the design.
