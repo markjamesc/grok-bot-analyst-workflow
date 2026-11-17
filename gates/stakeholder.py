@@ -58,6 +58,16 @@ PREFERENCE_RE = re.compile(r"\b(prefer\w*|rather|my (own )?(view|preference|gues
 # The owner's lock must use a lock word and must not be negated or conditional (docs/rules.md 35).
 LOCK_RE = re.compile(r"\b(lock(ed)?|approve[ds]?|confirm(ed)?|agree[ds]?|go ahead|sign(ed)? off|accept(ed)?)\b", re.IGNORECASE)
 NEGATION_RE = re.compile(r"\b(don'?t|do not|not|never|no|hold off|wait|until|unless|if)\b", re.IGNORECASE)
+# Phrases that confirm a lock rather than negate it ("Lock it, no changes."); removed before the negation check.
+CONFIRMING_NO_RE = re.compile(r"\b(no (more |further |other )?(changes?|edits?|tweaks?|revisions?|questions?)( needed)?|nothing (else |more )?to change)\b",
+                              re.IGNORECASE)
+
+
+def plain_lock(q):
+    """True when the quote uses a lock word and is not negated or conditional (docs/rules.md 35)."""
+    if not text(q) or LOCK_RE.search(q) is None:
+        return False
+    return NEGATION_RE.search(CONFIRMING_NO_RE.sub(" ", q)) is None
 NUM_RE = re.compile(r"(?<![\w.])[-+]?\d[\d,]*(?:\.\d+)?%?(?![\w])")
 
 
@@ -505,8 +515,8 @@ def lock_checks(g, stage, conv, cited_ts):
           f"capture {cid!r} speaker is {c.get('speaker') if c else 'not captured'}; must be owner")
     q = lk.get("quote")
     g.add(f"{L}: quote is in the owner capture", _in(q, body), "quote found in the capture")
-    g.add(f"{L}: plain lock words", text(q) and LOCK_RE.search(q) is not None and NEGATION_RE.search(q) is None,
-          "the quote says lock/approve/confirm/agree/go ahead/sign off/accept, not negated or conditional")
+    g.add(f"{L}: plain lock words", plain_lock(q),
+          "the quote says lock/approve/confirm/agree/go ahead/sign off/accept, not negated or conditional ('no changes' is fine)")
     t = parse_ts(c.get("timestamp")) if c else None
     late = t is not None and all(t >= x for x in cited_ts)
     g.add(f"{L}: after every message it relies on", late, "the lock capture is not earlier than any cited capture")

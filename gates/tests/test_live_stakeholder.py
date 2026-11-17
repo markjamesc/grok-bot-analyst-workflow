@@ -179,6 +179,22 @@ class LiveStakeholder(unittest.TestCase):
         self.edit(r, SH.lock_rel("1"), lambda d: d.update(capture="S1-M05", quote="Don't lock it yet."))
         self.fails("G1", r, "plain lock words")
 
+    def test_g1_lock_with_no_changes_passes(self):
+        for i, q in enumerate(("Lock it, no changes.", "Approved as written, no further edits needed.", "Lock it. Nothing else to change.")):
+            r = self.copy()
+            self.add_capture(r, "1", f"S1-M1{i}", "owner", "2026-11-09T09:06:00-06:00", q)
+            self.edit(r, SH.lock_rel("1"), lambda d, i=i, q=q: d.update(capture=f"S1-M1{i}", quote=q))
+            rec = run_gate("G1", r, record=False)
+            self.assertEqual(rec["result"], "PASS", f"{q!r}: {failed(rec)}")
+
+    def test_g1_lock_still_refuses_negated_or_conditional(self):
+        for i, q in enumerate(("No, don't lock it.", "Lock it if the Stakeholder agrees.", "No changes yet, wait before you lock it.",
+                               "Lock it until Friday.", "Do not approve.")):
+            r = self.copy()
+            self.add_capture(r, "1", f"S1-M2{i}", "owner", "2026-11-09T09:06:00-06:00", q)
+            self.edit(r, SH.lock_rel("1"), lambda d, i=i, q=q: d.update(capture=f"S1-M2{i}", quote=q))
+            self.fails("G1", r, "plain lock words")
+
     def test_g1_lock_before_the_messages_it_relies_on(self):
         r = self.copy()
         self.add_capture(r, "1", "S1-M00", "owner", "2026-11-09T08:00:00-06:00", "Lock it.")

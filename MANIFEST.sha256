@@ -17,7 +17,7 @@ f7808464bb281a90d9ac321979ad963afbe5fd7b7290e8eb3c30d172d88be684  ./docs/roles/a
 64fa56fce39f1cc4c8c3c7cb319cb1988198bf4b63625db495c472e48c416314  ./docs/roles/second-designer.md
 aa2c1f6d8f358767c2af427573b51474714683490c10338d9b3c323167bc9f38  ./docs/roles/sql-analyst.md
 40ee9000360e6d530f0ffbca185af829df5286bc5368599c790a2c0533acb570  ./docs/roles/stakeholder.md
-cec2505efd737a38979f62a00d80143d893e2d7d2c7bb8283236b66a4047ae60  ./docs/rules.md
+aaf51250681dc2b813602753a680b8a90a0596046d231800863fdb884ace2fb1  ./docs/rules.md
 8914150280181500f522bb5c266fa7324ea9030a2d8445c6c7098a77a1741082  ./docs/stages.md
 7c202a4496eec1f5ffda49734a3c35e8063e4847ff39ec66a97170c40db2e1f9  ./gates/README.md
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./gates/__init__.py
@@ -42,7 +42,7 @@ ed68d1efae48555633ba6bef2ccec4daccda5c1982f76f6e285159837b4f7cdd  ./gates/reconc
 f23a86b2ba99e855c155755897db0258bc23eb760a8296dc19fc760832eb97b8  ./gates/run.py
 a8cdc3acab15eafd8fc1f9402f3b98e62e191a7d970364f2b468f5f9b804d382  ./gates/sql_select_only.py
 1523cfbb824af52aa440a6f29dd06218a98558eb668b83d4389e4e2dd2e22ede  ./gates/stage_gates.py
-8c4cedec559c9de015ec311aba78f4650066cb05964dd11ca4f278a774d69e16  ./gates/stakeholder.py
+97d84b96392d2af93db3cc9081fdf5557a72982e8b9be9fade655054ca01c80d  ./gates/stakeholder.py
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./gates/tests/__init__.py
 3b22530ed54a83cc8abbd7b38648f9ab3da73c3d912adce1d515b3ad1604b005  ./gates/tests/fixture_project.py
 a237faef50460ce6bcfb9284e11f51b2e5a810733334f849ff5e980d332a4393  ./gates/tests/make_r_certified_project.R
@@ -51,7 +51,7 @@ c2fac81f9f3d6e3944b9f71567aab027d3db9914494f58e64e26b890b75e6126  ./gates/tests/
 b59dc580fe8787726076da4a3386a3629bb1a68826f51812be8b3bb76cc6ed82  ./gates/tests/test_case02_changes.py
 947567a939b35ae891cdadd830b893fe35455c72db89ecf6b3c224cb72b82e39  ./gates/tests/test_case03_changes.py
 ffeae34bc62f186bae22490209a88a798aa7918428cfb010e84f324c339d1e1c  ./gates/tests/test_finish_gates.py
-2049abf53f9e8aa81d5d396a08bb4e6f630535ded973d4422643428753428702  ./gates/tests/test_live_stakeholder.py
+5093bf4db806accea0da5013ea928c7560af7b8fa355393b1a1a8bdc4170d77a  ./gates/tests/test_live_stakeholder.py
 7c6ae00bf6834cb25cb5c8d8e5141715229c8564ba4d8b1501efca0d9cf64ca7  ./gates/tests/test_parity.py
 c878808b344336c17600de1668e3216fdb6071163a38b3ba035cac2939396f6f  ./gates/tests/test_rsem.py
 cd141e99ccfbaab10846eeaa000c3894003496be329c31104665b4e5e2b580c3  ./gates/tests/test_stage_gates.py
