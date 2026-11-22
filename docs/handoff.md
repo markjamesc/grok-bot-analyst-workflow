@@ -39,19 +39,20 @@ MISSING INPUT: <item>
 ```
 
 ## Parent duties
-- List every packet in `artifacts/packets/index.json` (id, path, status draft/sent/answered, sealed sha256, and the sealed reply once answered) and run G0 before each send and after each capture.
+Gate runs (G0 included), captures, promotes, seals and closes are done by the Gate Runner; SQL is executed by the Database Connector; stage advancement is the Coordinator's (docs/roles/). The parent's own duties:
+- List every packet in `artifacts/packets/index.json` (id, path, status draft/sent/answered, sealed sha256, and the sealed reply once answered) and have the Gate Runner run G0 before each send and after each capture.
 - Build each sent packet from the template as a new file; never send the template. G0 rejects `TEMPLATE` text, `{{placeholders}}` and the format's `<...>` placeholders.
 - A packet is answered only when the child's reply arrives and ends with `ANSWERED <PACKET_ID>`. A file appearing on disk is not a completed send.
 - Record send time, the packet hash, and the captured reply hash in the run ledger.
 - Name the output paths in each packet under EXPECTED OUTPUT. The child writes only to those paths.
-- Check the reply against EXPECTED OUTPUT before sealing it.
+- Check the reply against EXPECTED OUTPUT before the Gate Runner seals it.
 - A correction is a new packet with a `-vN` suffix that names what it supersedes.
 - When a packet is replaced (for example a sent packet that failed G0), mark the old row in `artifacts/packets/index.json` with `superseded_by` (the newer packet id), `superseded_reason` and `superseded_at` (ISO timestamp with zone). Never edit or reseal the old packet.
 - List the public schema, brief and bundle files as inputs in every packet that might need them, so a child can derive a value meaning or a mapping instead of stopping.
 - Never attach a template JSON (`*.example.json`) or any JSON with placeholder references as an input. Attach the adapted, real file or a prose summary (G0).
 
 ## Live Stakeholder chat (Stages 1 and 2)
-The Stakeholder gets no packet. It is briefed with exactly two files, the public brief and the persona the parent writes from it, and speaks only in the group chat with the owner and the parent. The parent records the chat with the capture tool, never by hand:
+The Stakeholder gets no packet. It is briefed with exactly two files, the public brief and the persona the parent writes from it, and speaks only in the group chat with the owner and the parent. The Gate Runner records the chat with the capture tool, never by hand:
 
 ```text
 python3 -m gates.stakeholder init <root> --stage 1 --brief <brief> --persona <persona> --run-kind live
@@ -76,20 +77,20 @@ python3 -m gates.stakeholder lock <root> --stage 1 --capture <owner capture id> 
 - Send the G2F feasibility result for review.
 
 ## Stage 3 packets for the SQL Analyst
-- Send the current design so the SQL Analyst can write the G3S source gates (extraction completeness, keys, joins, counts). The parent runs those gates.
+- Send the current design so the SQL Analyst can write the G3S source gates (extraction completeness, keys, joins, counts). The Gate Runner runs those gates through the Database Connector, which reports the snapshot it opened.
 
 ## Stage 3 packets for the Risk Reviewer
 - Send the current design for a red-team.
-- After the parent runs G3S, send the source-gate code and results for review.
+- After the Gate Runner runs G3S, send the source-gate code and results for review.
 
 ## Stage 4 packets for the SQL Analyst
 - Send the locked design and the frozen, hashed snapshot (not a live system) so the SQL Analyst can run independent SELECT-only queries. Do not include R-A or R-B work before freeze.
 
 ## Stage 4 packets for the Risk Reviewer
-- After the parent reconciles R-A, R-B, and SQL (G4b), send the reconciliation report and the reconciled evidence for the G4c review. Name the output paths in the packet.
+- After the Gate Runner reconciles R-A, R-B, and SQL (G4b), send the reconciliation report and the reconciled evidence for the G4c review. Name the output paths in the packet.
 
 ## Case02 additions
-- **Stage 5 review packets** list, as inputs, the claims ledger under review and the runner-written G5P record for that exact ledger (`artifacts/gates/history/G5P-*.json`). G0 fails a Stage 5 Second Designer or Risk Reviewer packet unless that record is a PASS for the same ledger path and hash with unchanged inputs; a file merely named "precheck" does not count. A reviewer reads the precheck first and says whether each failing check is a real defect or a tool limit.
+- **Stage 5 review packets** list, as inputs, the claims ledger under review and the runner-written G5P record for that exact ledger (`artifacts/gates/history/G5P-*.json`). G0 fails a Stage 5 Second Designer or Risk Reviewer packet unless that record is a PASS for the same ledger path and hash with unchanged inputs and unchanged reports; a file merely named "precheck" does not count. A reviewer reads the precheck first and says whether each failing check is a real defect or a tool limit.
 - **Stage 5 review record shape** (G5): `{"role", "subjects": [{path, sha256}], "findings": [{"id": "SD5-01", "class": "must_fix"|"advisory", "status": "open"|"closed", ...}], "claim_results": [...], "uncovered_claims": [], "verdict"}`. Ids carry the role: `SD5-` Second Designer, `RR5-` Risk Reviewer, `X5-` cross review. `uncovered_claims` is `[]` when every claim is covered, otherwise a list of claim ids; never a note. Every declared companion file of the finish package is a subject of both reviews.
 - **Capture, then promote.** The step that saves a reply sets the packet to `captured`. `python3 -m gates.packet promote <root> <id>` sets it to `answered` only when G0 passes. Nothing may seal a captured packet's files.
 - **Cite versioned paths.** A review should cite the ledger it read by its versioned copy (for example `outputs/<packet>/stage5_claims_vNN.json`). When the canonical ledger is replaced after a review cited it, the archiving step writes the H1 historical-send record (`artifacts/operations/finish.historical.json` and its supersession record); G5P and G5 fail an unresolved stale reference.

@@ -23,14 +23,14 @@
 
 ## Outputs
 - Feasibility verdict per question: yes / partly / no, with reason
-- **Stage 3 SQL source gates** (G3S): SELECT-only checks, written against the design, for extraction completeness, keys, joins, and counts. The parent runs these gates.
-- **Stage 4 independent computation**: SELECT-only queries run on the frozen, hashed snapshot, independent of R-A and R-B, for the parent to reconcile against R.
+- **Stage 3 SQL source gates** (G3S): SELECT-only checks, written against the design, for extraction completeness, keys, joins, and counts. The Gate Runner runs these gates through the Database Connector.
+- **Stage 4 independent computation**: SELECT-only queries run on the frozen, hashed snapshot, independent of R-A and R-B, executed by the Database Connector, for the Gate Runner to reconcile against R (G4b).
 
 ## Forbidden
 - Any statement other than SELECT (no INSERT, UPDATE, DELETE, DDL, or temp writes to the source).
 - Proposing new questions from the data.
 - Seeing R-A or R-B before your version is frozen.
-- Running the Stage 3 source gates yourself; the parent runs them.
+- Running the Stage 3 source gates yourself; the Gate Runner runs them through the Database Connector.
 - Querying a live system in Stage 4; use only the frozen, hashed snapshot.
 - Seeing or asking for the private answer key.
 - Overwriting or resealing any sent, reviewed, or frozen file. Corrections are new versions.

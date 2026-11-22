@@ -231,7 +231,7 @@ class StageGates(unittest.TestCase):
         for q in ("DELETE FROM orders", "CREATE TABLE x(a)", "ATTACH DATABASE ':memory:' AS m", "PRAGMA writable_schema=1"):
             with self.assertRaises(sqlite3.DatabaseError, msg=q):
                 S.run_sqlite(db, q)
-        self.assertEqual(S.run_sqlite(db, "SELECT COUNT(*) FROM orders")[1], [[3]])
+        self.assertEqual(S.run_sqlite(db, "SELECT COUNT(*) FROM orders")[1], [[4]])
 
     # ---------------------------------------------------------------- G3K + repair cap
     def test_g3k_duplicate_key(self):
@@ -244,7 +244,7 @@ class StageGates(unittest.TestCase):
 
     def test_g3k_count_mismatch(self):
         r = self.copy()
-        d = F.rj(r, "artifacts/stage3_grok_design.json"); d["early_checks"]["counts"][0]["expected_rows"] = 4
+        d = F.rj(r, "artifacts/stage3_grok_design.json"); d["early_checks"]["counts"][0]["expected_rows"] = 5
         F.wj(r, "artifacts/stage3_grok_design.json", d)
         self.assertFailsOn("G3K", r, "Count orders_n reconciles")
 
@@ -325,7 +325,7 @@ class StageGates(unittest.TestCase):
 
     def test_g3_source_gate_review_stale(self):
         r = self.copy()
-        F.add_stage3(r, {"counts": "SELECT 'customers' AS t WHERE (SELECT COUNT(*) FROM customers) <> 2 -- v2"})
+        F.add_stage3(r, {"counts": "SELECT 'customers' AS t WHERE (SELECT COUNT(*) FROM customers) <> 3 -- v2"})
         F.review(r, "artifacts/stage3/reviews/risk_reviewer_source_gates.json", "risk_reviewer", ["artifacts/stage3/source_gates/manifest.json"])
         self.assertFailsOn("G3", r, "Risk Reviewer source-gate review coverage")
 
@@ -424,22 +424,22 @@ class StageGates(unittest.TestCase):
 
     def test_g4b_missing_row(self):
         r = self.copy()
-        F.add_stage4_outputs(r, {"ra": "customer_id,total,n_orders\nc1,15.5,2\n"})
+        F.add_stage4_outputs(r, {"ra": "customer_id,total,n_orders,decision\nc1,15.5,2,expand\nc2,7,1,hold\n"})
         self.assertFailsOn("G4b", r, "summary: ra vs rb exact match")
 
     def test_g4b_extra_column(self):
         r = self.copy()
-        F.add_stage4_outputs(r, {"sql": "customer_id,total,n_orders,x\nc1,15.5,2,1\nc2,7,1,1\n"})
+        F.add_stage4_outputs(r, {"sql": "customer_id,total,n_orders,decision,x\nc1,15.5,2,expand,1\nc2,7,1,hold,1\nc3,10,1,hold,1\n"})
         self.assertFailsOn("G4b", r, "ra vs sql exact match")
 
     def test_g4b_whitespace_is_a_difference(self):
         r = self.copy()
-        F.add_stage4_outputs(r, {"rb": "customer_id,total,n_orders\nc1,15.5,2\nc2,7, 1\n"})
+        F.add_stage4_outputs(r, {"rb": "customer_id,total,n_orders,decision\nc1,15.5,2,expand\nc2,7, 1,hold\nc3,10,1,hold\n"})
         self.assertFailsOn("G4b", r, "ra vs rb exact match")
 
     def test_g4b_row_order_is_not_a_difference(self):
         r = self.copy()
-        F.add_stage4_outputs(r, {"rb": "customer_id,total,n_orders\nc2,7,1\nc1,15.5,2\n"})
+        F.add_stage4_outputs(r, {"rb": "customer_id,total,n_orders,decision\nc3,10,1,hold\nc2,7,1,hold\nc1,15.5,2,expand\n"})
         self.assertFailsOn("G4b", r, "G4a PASS and current")  # outputs record changed since G4a ran
         self.assertEqual(run_gate("G4a", r)["result"], "PASS")
         self.assertEqual(run_gate("G4b", r)["result"], "PASS")
@@ -448,12 +448,12 @@ class StageGates(unittest.TestCase):
         r = self.copy()
         F.wt(r, "outputs/sql/summary.csv", F.CSV_SUMMARY)  # same bytes is fine
         self.assertEqual(run_gate("G4b", r)["result"], "PASS")
-        F.wt(r, "outputs/sql/summary.csv", F.CSV_SUMMARY + "c3,1,1\n")
+        F.wt(r, "outputs/sql/summary.csv", F.CSV_SUMMARY + "c4,1,1,hold\n")
         self.assertFailsOn("G4b", r, "ra vs sql exact match")
 
     def test_g4b_duplicate_keys(self):
         r = self.copy()
-        dup = F.CSV_SUMMARY + "c2,7,1\n"
+        dup = F.CSV_SUMMARY + "c2,7,1,hold\n"
         F.add_stage4_outputs(r, {"ra": dup, "rb": dup, "sql": dup})
         self.assertFailsOn("G4b", r, "ra vs rb exact match")
 

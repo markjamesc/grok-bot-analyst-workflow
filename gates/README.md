@@ -1,4 +1,4 @@
-# Gates (Python, parent-owned)
+# Gates (Python, run by the Gate Runner)
 
 Analysis stays in R. Only the gates and checks are Python (standard library only; no pandas or pyyaml needed).
 Every gate returns **PASS**, **FAIL** or **TOOL_ERROR**. An unrun gate is not PASS, and a gate with missing input never PASSes.
@@ -117,7 +117,11 @@ only if every current subject is listed at the same path with the current hash; 
 - **G3S:** SELECT-only by static lint (one statement, SELECT/WITH, no write/DDL/session keyword outside quotes and
   comments; conservative, so a bare identifier such as `comment` or `set` must be quoted) **and** by execution on a
   read-only, immutable sqlite connection with `query_only` and an authorizer that denies all but reads. Engines other
-  than sqlite need an executor passed to `g3s(root, executor=...)`; without one the gate is TOOL_ERROR.
+  than sqlite need an executor (the Database Connector) passed to `g3s(root, executor=...)`; without one the gate is
+  TOOL_ERROR. The executor returns `(columns, rows, total, opened)` where `opened` is `{id, sha256}` of the snapshot it
+  actually opened; the built-in sqlite connector hashes the file it opens. Each query FAILs on `<id>: connector opened the
+  requested snapshot` unless `opened` equals the manifest's snapshot id and sha256, even with zero violating rows; a
+  connector that reports no identity fails the same check. Each result row keeps `opened_snapshot`.
 - **G2F:** structure and quality only: whitelisted keys, flat entries, forbidden value-like keys
   (values, samples, min, max, mean, rows, answer_key, ...), no mention of the answer key, no new or missing questions.
 - **Repair cap:** three unsuccessful repairs of the same defect id, then ESCALATED; a fourth attempt is refused; a change
@@ -178,3 +182,16 @@ Grok runs must produce those files, or the owner must approve a Grok-specific ma
 - **G3:** `decision_flip_fixtures` (Stage 3) and rounding-only tolerances (Stage 4).
 - Tests: `gates/tests/test_sunday_changes.py`. The base fixtures now carry a snapshot id, the Stage 4 snapshot and the
   decision-flip declarations, so every existing good path still passes.
+
+## Repair round 1 (2026-11-22, after outside review of 3faeb07)
+
+- **G3S checks the snapshot actually opened.** The connector returns the identity of the snapshot it opened with every
+  result; G3S FAILs a query whose opened snapshot is not the requested one, even when all checks return zero rows.
+- **G5P binds every report it reviewed.** The G5P record lists `deliverables` [{path, sha256}] (deliverables and companions)
+  and adds them to its inputs; G0 rejects a Stage 5 review packet whose G5P record lacks them or whose reports changed after
+  G5P. G5 and G6 already refuse a report changed after G5 (tested).
+- **Exact-threshold fixture.** The base fixture's customer c3 totals exactly 10 (TH1: expand only above 10) and the summary
+  carries the decision, so an implementation using >= 10 fails G4a against the worked answer and G4b against its peers.
+- **Operational roles.** Gate runs, captures, seals and closes belong to the Gate Runner, read-only SQL execution to the
+  Database Connector, and stage advancement to the Coordinator (docs/roles/).
+- Tests: `gates/tests/test_sunday_fixes_r1.py`.

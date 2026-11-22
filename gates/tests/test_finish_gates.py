@@ -191,7 +191,7 @@ class FinishGates(unittest.TestCase):
     def test_g0_input_stale_hash(self):
         r = self.copy()
         body = F.packet_text(r, "CASE-4-01")
-        F.wt(r, "outputs/ra/summary.csv", F.CSV_SUMMARY + "c3,1,1\n")
+        F.wt(r, "outputs/ra/summary.csv", F.CSV_SUMMARY + "c4,1,1,hold\n")
         self._one(r, body)
         self.assertFailsOn("G0", r, "inputs whole and current")
 
@@ -499,7 +499,7 @@ class FinishGates(unittest.TestCase):
 
     def test_g5_evidence_changed_after_seal(self):
         r = self.copy()
-        F.wt(r, "outputs/ra/summary.csv", F.CSV_SUMMARY + "c3,1,1\n")
+        F.wt(r, "outputs/ra/summary.csv", F.CSV_SUMMARY + "c4,1,1,hold\n")
         rec = self.assertFailsOn("G5", r, "Claim C1 tied to sealed evidence")  # G4b, which sealed it, is no longer current
         self.assertIn("Claim C2 tied to sealed evidence", failed(rec))
         self.assertFailsOn("G6", r, "G4b PASS and current")

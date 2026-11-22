@@ -4,7 +4,7 @@
 2. Never overwrite or reseal sent, reviewed, or frozen inputs. Make new versions.
 3. Keep the parent and children isolated; score blind; keep the key away from live roles. The earlier key preparer from the ChatGPT (Version 1) side holds the key and scores.
 4. All bots share one model family, so their independence is limited. Say so.
-5. Analysis is in R. SQL is SELECT-only. Gates are Python, owned by the parent.
+5. Analysis is in R. SQL is SELECT-only and executed read-only by the Database Connector. Gates are Python, run by the Gate Runner; the Coordinator advances only on a PASS for the attempt it requested; the parent orchestrates.
 6. No writes to live systems without owner approval.
 7. Escalate only material analytical or business changes and required approvals.
 8. Repair cap of 3 per defect, then escalate with problems, a recommendation, and a batched revision.
@@ -18,7 +18,7 @@
 16. **No template placeholders in the evidence.** Never attach a shape template (`*.example.json`, placeholder fixtures, all-zero or `NOT_SET` hashes) as a packet input or design reference. Adapt it with real frozen files first. G0 rejects it before the send and G3 at the design lock, because R `finalize` would fail on it at the end.
 17. **Replaced packets are marked superseded.** A packet replaced by a newer one is marked in the packet index with `superseded_by`, `superseded_reason` and `superseded_at`. It stays sealed; G0 stops checking its content and G6 no longer counts it.
 18. **Stage 3 locks every Workflow Gate field.** G3 fails a locked design that lacks any Stage 3 field the R Workflow Gate reads at G4d (including `ml_mode`, `fixture_version`, `fixture_ids`, `reconciliation_critical_fields`, and the `ranking_contract` under a hard attention budget), so the gap is found at lock and not at release.
-19. **Prechecks travel with reviews.** Before a Stage 5 ledger goes to review or is placed, the parent runs G5P, which runs exactly the G5 claim and content checks (CSV evidence read cell by cell). The latest G5P log of the ledger under review is an input of every Stage 5 review packet (G0 checks it).
+19. **Prechecks travel with reviews.** Before a Stage 5 ledger goes to review or is placed, the Gate Runner runs G5P, which runs exactly the G5 claim and content checks (CSV evidence read cell by cell). The latest G5P log of the ledger under review is an input of every Stage 5 review packet (G0 checks it).
 20. **Report path changes reach every claim.** A revision brief that changes a deliverable path requires the author to update the `deliverable` field of every claim that quotes it, not only the deliverables list. G5 and G5P fail a claim whose deliverable is not in the ledger.
 21. **The SQL Analyst writes the extract.** The parent never writes an extract or a builder's file. A builder corrects its own file before send by a logged correction (`artifacts/stage4/corrections.json`, reviewed at G4c), not by unlocking and re-freezing.
 22. **Disclosures state what the record says.** A disclosure quotes or paraphrases the sealed record it refers to, not a recollection. When a disclosure is corrected, every ledger field that repeats it (claims, quotes, notes, deliverables) is swept and updated in the same revision.
@@ -38,8 +38,8 @@
 35. **Stakeholder approval is never a lock.** Stage 1 and Stage 2 are locked only by the owner's own captured words (lock, approve, confirm, agree, go ahead, sign off or accept, not negated or conditional; confirming phrases such as "no changes" or "no further edits" are fine), bound to the exact hash of the decision document or framing, and later than every message it relies on.
 36. **Freeze counts restart with a workflow change to the stage inputs.** The live Stakeholder restarted every stage's clean-in-a-row count at zero from the first case run this way (docs/stages.md).
 37. **Advance only on the attempt you asked for** (2026-11-22). Every gate run has an attempt id and every outcome is recorded, TOOL_ERROR included; a failed retry replaces the earlier PASS. Move on only when `python3 -m gates.attempt <GATE> <root> <id>` exits 0 for the attempt you requested.
-38. **A source check covers one snapshot.** G3S records the frozen snapshot's id and hash; Stage 4 must run on that exact snapshot (G4a/G4b). A new snapshot needs a fresh G3S.
-39. **A precheck is a record, not a file name.** A Stage 5 review packet carries the runner-written G5P PASS record for the exact ledger in the packet (G0).
+38. **A source check covers one snapshot.** The Database Connector reports the snapshot it actually opened and G3S fails unless it is the requested one; G3S records the frozen snapshot's id and hash; Stage 4 must run on that exact snapshot (G4a/G4b). A new snapshot needs a fresh G3S.
+39. **A precheck is a record, not a file name.** A Stage 5 review packet carries the runner-written G5P PASS record for the exact ledger in the packet, and every report it reviewed must be unchanged (G0).
 40. **One finish order:** owner approves the exact finish package -> R `complete finish` -> G5 -> R `finalize` -> G6.
 41. **Real alternatives.** Stage 1 lists keeping the current policy and waiting or deferring as options, and the question does not presuppose the hoped-for answer. Stage 5 recommends the best justified action with no change as a real option and states any causal claim separately.
 42. **Decision-flip fixtures and known answers.** Stage 3 declares hand-checkable fixtures for the exact threshold, pooling, missing values and duplicate joins (G3); Stage 4 checks every implementation against them even when the implementations agree (G4a).

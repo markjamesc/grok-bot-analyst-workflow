@@ -82,6 +82,17 @@ def _authorizer(action, *_):
     return sqlite3.SQLITE_OK if action in _ALLOWED_ACTIONS else sqlite3.SQLITE_DENY
 
 
+def run_sqlite_identified(db_path, sql, snapshot_id, max_rows=1000):
+    """The built-in sqlite database connector: run one SELECT on the read-only snapshot file and also return the identity
+    {id, sha256} of the file it actually opened (hashed before opening and after closing; a file that changed while it
+    was open has no single identity, so its hash is reported as None)."""
+    from gates.common import sha256_file
+    before = sha256_file(db_path)
+    cols, rows, total = run_sqlite(db_path, sql, max_rows)
+    after = sha256_file(db_path)
+    return cols, rows, total, {"id": snapshot_id, "sha256": before if before == after else None}
+
+
 def run_sqlite(db_path, sql, max_rows=1000):
     """Execute one SELECT on a read-only snapshot. Returns (columns, rows, total_row_count)."""
     uri = "file:" + db_path.replace("?", "%3f").replace("#", "%23") + "?mode=ro&immutable=1"

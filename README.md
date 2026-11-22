@@ -1,6 +1,6 @@
 # Grok Bot analyst workflow (design draft)
 
-This folder is the design of a Grok Bot team version of a five-stage analyst workflow. A parent bot orchestrates; seven child bots take named roles (the Stakeholder only in Stages 1–2). It is published as a **public method repository**, a portable workflow design, not a case archive.
+This folder is the design of a Grok Bot team version of a five-stage analyst workflow. A parent orchestrates; three operational roles (Coordinator, Gate Runner, Database Connector) run the process tools; seven child roles do the analytical work (the Stakeholder only in Stages 1–2). It is published as a **public method repository**, a portable workflow design, not a case archive.
 
 A later push to `main` still needs a separate, single owner approval.
 
@@ -20,23 +20,26 @@ Every bot in this version is a Grok Bot, so they share one model family. Separat
 
 | Role | Who | Job |
 |---|---|---|
-| Parent | Data Analysis and Coding bot | Orchestrates, pins the workflow, packs and seals work, runs gates, reconciles outputs, escalates. Does not author analysis or interpretation. |
+| Parent | Orchestrator | Pins the workflow, writes the persona and runs the Stakeholder group chat, packs and sends packets, routes reviews, puts decisions to the owner and records his approvals, escalates. Does not run gates, capture, seal or close, execute SQL, or advance a stage; does not author analysis or interpretation. |
+| Coordinator | Operational role | Requests each gate run with an attempt id and advances a stage only on a PASS for the attempt it requested (`python3 -m gates.attempt`); counts repairs. |
+| Gate Runner | Operational role | Runs every Python gate (G0–G6, G5P, GD, GP) and the capture, promote, seal and close tools; records every outcome under the Coordinator's attempt id. |
+| Database Connector | Operational role | Executes the SQL Analyst's SELECT-only SQL read-only on the frozen snapshot (feasibility, G3S, Stage 4) and returns the identity of the snapshot it actually opened. |
 | Stakeholder | Child bot | Stages 1–2 only. Plays the business person in a group chat with the owner and the parent: opens the case, answers clarifying questions from the brief, reacts to the framing. Reads only the public brief and a persona written from it; never locks anything. |
 | Lead Designer | Child bot | Writes the Stage 1 decision document, drafts Stages 2–3, and writes the Stage 5 write-up. |
 | Second Designer | Child bot | Writes an independent Stage 3 design before seeing the lead's, then compares; also Stage 2 critique and Stage 5 inference review. |
 | Risk Reviewer | Child bot | Checks framing at Stage 2, red-teams the design at Stage 3, reviews source gates and post-reconciliation evidence, and audits every number at Stage 5. |
 | Analyst R-A | Child bot | Independent judged analysis in R. |
 | Analyst R-B | Child bot | Second independent judged analysis in R. Does not see R-A before freeze. |
-| SQL Analyst | Child bot | SELECT-only SQL: data-feasibility check, Stage 3 source gates (parent runs, Risk Reviewer reviews), and an independent Stage 4 computation on the frozen hashed snapshot. |
+| SQL Analyst | Child bot | SELECT-only SQL: data-feasibility check, Stage 3 source gates (Gate Runner runs them through the Database Connector, Risk Reviewer reviews), and an independent Stage 4 computation on the frozen hashed snapshot. |
 
-Role instructions: [docs/roles/](docs/roles/). **Stage 5 reuses these existing bots:** the Lead Designer writes the interpretation, the Second Designer checks the inference, and the Risk Reviewer audits every number (and may recompute arithmetic from sealed results, but never sees the answer key). There are no dedicated finish bots.
+Role instructions: [docs/roles/](docs/roles/). Operational roles (repair round 1, 2026-11-22): the **Gate Runner** runs every gate and the capture, promote, seal and close tools; the **Database Connector** executes the SQL Analyst's SELECT-only SQL read-only on the frozen snapshot and reports the snapshot it opened; the **Coordinator** requests each gate run with an attempt id and advances a stage only on a PASS for the attempt it requested. The parent orchestrates and never does those three jobs itself. **Stage 5 reuses these existing bots:** the Lead Designer writes the interpretation, the Second Designer checks the inference, and the Risk Reviewer audits every number (and may recompute arithmetic from sealed results, but never sees the answer key). There are no dedicated finish bots.
 
 ## Stages
 
 1. **Start** — a live conversation in a group chat: the Stakeholder opens, the parent asks clarifying questions, the owner weighs in; every message relied on is captured exactly. The Lead Designer writes the Stage 1 decision document (agreed decision and question) from the brief and the captures; the owner locks it in his own words; the parent pins the workflow and checks it at G1.
 2. **Framing** — turn the decision into one precise question, talked through with the Stakeholder in the same group chat and locked by the owner in his own words.
-3. **Design** — lock how the question will be measured and tested. A **data-feasibility gate** sits between Stage 2 and Stage 3. In Stage 3 the SQL Analyst writes the SQL source gates; the parent runs them.
-4. **Execution** — write and check the code (R-A, R-B, and SELECT-only SQL on the frozen hashed snapshot). The parent reconciles SQL against R; the Risk Reviewer then checks the reconciled evidence.
+3. **Design** — lock how the question will be measured and tested. A **data-feasibility gate** sits between Stage 2 and Stage 3. In Stage 3 the SQL Analyst writes the SQL source gates; the Gate Runner runs them through the Database Connector.
+4. **Execution** — write and check the code (R-A, R-B, and SELECT-only SQL on the frozen hashed snapshot). The Gate Runner reconciles SQL against R (G4b); the Risk Reviewer then checks the reconciled evidence.
 5. **Finish** — interpret the sealed results and recommend an action. Scoring happens only after the freeze, by someone who was not a live role.
 
 Details: [docs/stages.md](docs/stages.md) and [docs/explainer.md](docs/explainer.md).
@@ -46,7 +49,7 @@ Details: [docs/stages.md](docs/stages.md) and [docs/explainer.md](docs/explainer
 These are design requirements for this draft. Items 1, 8 and 9 have Python gate code; the rest are process rules in the documents.
 
 1. **Python gates with parity tests** against the current R gates. Implemented: see [Status](#status).
-2. **Analysis stays in R.** SQL is SELECT-only (feasibility, Stage 3 source gates, and an independent Stage 4 computation on the frozen hashed snapshot). The parent runs the SQL source gates at Stage 3 and reconciles SQL against R at Stage 4. The Risk Reviewer reviews the source gates and, after reconciliation, the evidence.
+2. **Analysis stays in R.** SQL is SELECT-only (feasibility, Stage 3 source gates, and an independent Stage 4 computation on the frozen hashed snapshot). The Gate Runner runs the SQL source gates at Stage 3 (the Database Connector executes them) and reconciles SQL against R at Stage 4 (G4b). The Risk Reviewer reviews the source gates and, after reconciliation, the evidence.
 3. **Data-feasibility gate** between Stage 2 and Stage 3: `yes` / `partly` / `no`, with a reason. Stages 1 and 2 stay blind to the data. Data must never shape or add questions. A `partly` or `no` goes to the owner.
 4. **Fewer, clearer rules**, backed by the evidence rules below.
 5. **Greater autonomy.** Escalate only materially consequential analytical or business changes, and genuinely required approvals.

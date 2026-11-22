@@ -2,6 +2,16 @@
 
 All notable changes to this design draft are recorded here. Dates are America/Chicago.
 
+## 0.6.1 — 2026-11-22 (repair round 1)
+
+Fixes for the false passes an outside review reproduced on 0.6.0 (3faeb07). Lessons L33–L36.
+
+- **G3S verifies the snapshot the connector actually opened** (id and sha256 returned with every result); a clean result on another snapshot FAILs.
+- **G5P records every deliverable and companion it reviewed**, as `deliverables` and as inputs; G0 rejects a Stage 5 review packet whose reports changed after G5P.
+- **Exact-threshold fixture:** customer c3 totals exactly 10 and the summary carries the decision; a >= 10 implementation fails G4a and G4b.
+- **Operational roles** (docs/roles/coordinator.md, gate-runner.md, database-connector.md): gate runs, captures, seals and closes belong to the Gate Runner, read-only SQL execution to the Database Connector, stage advancement on a PASS for the requested attempt to the Coordinator. The README role table no longer names a bot.
+- Tests: `gates/tests/test_sunday_fixes_r1.py`; base fixture data and the tests that quote it updated.
+
 ## 0.6.0 — 2026-11-22
 
 Owner-approved workflow changes: the four known fixes and the stage refinements, inside the existing roles and gates (lessons L29–L32; standing rules 37–44). Not adopted: feasibility before the Stage 2 lock, a model-family switch, the 750-run benchmark.

@@ -133,8 +133,10 @@ def add_live_stakeholder(root):
     add_conversation(root, "1", CHAT1, STATEMENTS1, "S1-M04", "Confirm Stage 1 as written, lock it.")
     add_conversation(root, "2", CHAT2, STATEMENTS2, "S2-M02", "Approved, lock the framing.")
 
-CSV_SUMMARY = "customer_id,total,n_orders\nc1,15.5,2\nc2,7,1\n"
-CSV_ORDERS = "id,customer_id,amount\n1,c1,10\n2,c1,5.5\n3,c2,7\n"
+# Repair round 1 (2026-11-22): c3 totals exactly the threshold of 10 (TH1: expand only above 10), so an implementation that
+# uses >= 10 instead of > 10 writes "expand" for c3 and fails G4a against the worked answer and G4b against its peers.
+CSV_SUMMARY = "customer_id,total,n_orders,decision\nc1,15.5,2,expand\nc2,7,1,hold\nc3,10,1,hold\n"
+CSV_ORDERS = "id,customer_id,amount\n1,c1,10\n2,c1,5.5\n3,c2,7\n4,c3,10\n"
 
 
 def build_r_project(root, last=4):
@@ -173,10 +175,10 @@ def add_feasibility(root, feas="yes", extra_q=None):
 
 
 SQL = {
-    "completeness": ("extraction_completeness", "SELECT 'orders short' AS problem WHERE (SELECT COUNT(*) FROM orders) <> 3"),
+    "completeness": ("extraction_completeness", "SELECT 'orders short' AS problem WHERE (SELECT COUNT(*) FROM orders) <> 4"),
     "keys": ("keys", "SELECT id, COUNT(*) AS n FROM orders GROUP BY id HAVING COUNT(*) > 1"),
     "joins": ("joins", "SELECT o.id FROM orders o LEFT JOIN customers c ON o.customer_id = c.id WHERE c.id IS NULL"),
-    "counts": ("counts", "SELECT 'customers' AS t WHERE (SELECT COUNT(*) FROM customers) <> 2"),
+    "counts": ("counts", "SELECT 'customers' AS t WHERE (SELECT COUNT(*) FROM customers) <> 3"),
 }
 
 
@@ -187,9 +189,9 @@ def make_snapshot(path, dup_order=False):
     con = sqlite3.connect(path)
     con.execute("CREATE TABLE orders(id INTEGER, customer_id TEXT, amount REAL)")
     con.execute("CREATE TABLE customers(id TEXT)")
-    rows = [(1, "c1", 10), (2, "c1", 5.5), (3, "c2", 7)] + ([(3, "c2", 7)] if dup_order else [])
+    rows = [(1, "c1", 10), (2, "c1", 5.5), (3, "c2", 7), (4, "c3", 10)] + ([(3, "c2", 7)] if dup_order else [])
     con.executemany("INSERT INTO orders VALUES (?,?,?)", rows)
-    con.executemany("INSERT INTO customers VALUES (?)", [("c1",), ("c2",)])
+    con.executemany("INSERT INTO customers VALUES (?)", [("c1",), ("c2",), ("c3",)])
     con.commit()
     con.close()
 
@@ -212,10 +214,10 @@ def add_stage3(root, sql_overrides=None):
                             "keys": ["customer_id"]}],
               "reconciliation": {"outputs": [{"name": "summary", "keys": ["customer_id"]}]},
               "early_checks": {"keys": [{"id": "orders_pk", "table": ref(root, "data/orders.csv"), "columns": ["id"]}],
-                               "counts": [{"id": "orders_n", "table": ref(root, "data/orders.csv"), "expected_rows": 3}]},
+                               "counts": [{"id": "orders_n", "table": ref(root, "data/orders.csv"), "expected_rows": 4}]},
               "decision_thresholds": [{"id": "TH1", "value": 10, "statement": "expand when a customer's total is above 10"}],
               "decision_flip_fixtures": [
-                  {"kind": "threshold_boundary", "fixture": "F1", "flips": "a total of exactly 10 is not above TH1; >= would expand it"},
+                  {"kind": "threshold_boundary", "fixture": "F1", "flips": "c3 totals exactly 10, which is not above TH1, so c3 holds; >= 10 would expand c3"},
                   {"kind": "pooling", "fixture": "F1", "flips": "pooling both customers puts the total above 10 for everyone"},
                   {"kind": "missing_values", "not_applicable": "amount has no missing values in the frozen schema (G2F quality)"},
                   {"kind": "duplicate_join", "fixture": "F1", "flips": "a duplicated customer row would double c2's total to 14"}],

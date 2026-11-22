@@ -49,3 +49,9 @@ Workflow changes, owner-approved 2026-11-22 (no case content or answers):
 - L30 | Changed data inherited an old source-gate PASS | G3S records the snapshot id and hash; G4a/G4b require Stage 4 to run on that exact snapshot | test_switch_to_snapshot_b_needs_fresh_check, test_g4a_g4b_fail_when_stage4_ran_on_another_snapshot
 - L31 | A file named "precheck" passed as a Stage 5 precheck | G0 requires a runner-written G5P PASS for the exact ledger in the packet | test_filename_alone_is_not_a_precheck, test_precheck_of_another_ledger_rejected, test_ledger_changed_after_precheck_rejected
 - L32 | The stage guide summary and the gate README gave different finish orders | one finish order, stated identically in every doc | test_same_finish_order_everywhere
+
+Repair round 1 of the 2026-11-22 changes (outside review; no case content or answers):
+- L33 | The connector queried snapshot B while the manifest named A, and G3S recorded PASS for A | the connector returns the identity of the snapshot it opened; G3S compares it with the requested one before PASS | test_connector_opening_b_while_a_requested_fails_g3s, test_connector_without_identity_fails_g3s
+- L34 | A report edited after G5P still passed G0 with the old precheck, because the G5P record bound only the ledger | G5P records every reviewed deliverable; G0 verifies them | test_g0_rejects_report_edited_after_g5p, test_g5p_records_every_deliverable
+- L35 | The exact-threshold fixture never contained a value at the threshold, so >= vs > could not be told apart | the base fixture has a customer at exactly 10 and the decision column | test_fixture_has_customer_exactly_at_threshold_and_holds, test_greater_or_equal_bug_fails_g4a_and_g4b
+- L36 | The README gave gate execution to the parent while live runs used separate operational roles | role docs for the Coordinator, Gate Runner and Database Connector; README, stage guide, gate list and handoff agree | test_operational_roles_documented_consistently

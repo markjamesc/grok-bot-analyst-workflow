@@ -28,8 +28,8 @@
 ## Inputs
 - Stage 1: the decision document, the brief, the conversation record and its captures
 - Stage 2: the Lead Designer's framing, whole, with its hash, and the Stage 1 and Stage 2 captures; then the G2F feasibility result
-- Stage 3: the current design files; SQL source gate code and the results the parent ran
-- Stage 4: the parent's reconciliation report and the frozen, reconciled evidence from R-A, R-B, and SQL, after G4b
+- Stage 3: the current design files; SQL source gate code and the results the Gate Runner recorded
+- Stage 4: the Gate Runner's reconciliation report and the frozen, reconciled evidence from R-A, R-B, and SQL, after G4b
 - Stage 5: sealed Stage 4 results and the Stage 5 draft
 
 ## Outputs

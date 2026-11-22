@@ -222,7 +222,10 @@ G3S_KINDS = ("extraction_completeness", "keys", "joins", "counts")
 
 def g3s(root, executor=None):
     """Runs the SQL Analyst's source gates. Each gate query returns violating rows; PASS means zero rows.
-    executor(sql_text, manifest_database) -> (columns, rows, total) for non-sqlite engines; ToolError if absent."""
+    The database connector runs each query and reports the frozen snapshot it actually opened:
+    executor(sql_text, manifest_database) -> (columns, rows, total, opened {id, sha256}) for non-sqlite engines (ToolError
+    if absent); the built-in sqlite connector hashes the file it opens. Repair round 1 (2026-11-22): every query's opened
+    identity must equal the requested snapshot's id and sha256, or that gate FAILs, even when it returns zero rows."""
     g = Gate("G3S", root)
     m = g.load(G3S_MANIFEST, "Source-gate manifest") or {}
     db = m.get("database")
@@ -265,11 +268,13 @@ def g3s(root, executor=None):
             continue
         try:
             if db["engine"] == "sqlite":
-                cols, rows, total = sql_select_only.run_sqlite(safe_rel(root, db["snapshot"]["path"]), sql)
+                out = sql_select_only.run_sqlite_identified(safe_rel(root, db["snapshot"]["path"]), sql, db["snapshot"].get("id"))
             elif executor is not None:
-                cols, rows, total = executor(sql, db)
+                out = executor(sql, db)
             else:
                 raise ToolError("engine external needs an executor")
+            cols, rows, total = out[:3]
+            opened = out[3] if len(out) > 3 else None
         except ToolError:
             raise
         except Exception as e:  # noqa: BLE001 - a failing query is a FAIL of that gate, recorded
@@ -277,9 +282,16 @@ def g3s(root, executor=None):
             results.append({"id": gid, "status": "ERROR", "error": str(e)})
             continue
         g.add(f"{gid}: query ran read-only", True, "read-only connection, SELECT-only authorizer")
+        got = snapshot_identity(opened)
+        same = snap is not None and got is not None and got["id"] == snap["id"] and got["sha256"] == snap["sha256"]
+        g.add(f"{gid}: connector opened the requested snapshot", same,
+              f"requested {snap and (snap['id'], snap['sha256'][:12])}; connector reported "
+              f"{got and (got['id'], got['sha256'][:12]) if got else opened!r}"
+              + ("" if same else " -- a clean result on another snapshot says nothing about the requested one"))
         g.add(f"{gid}: zero violating rows", total == 0, f"{total} violating rows")
-        results.append({"id": gid, "check": x.get("check"), "status": "PASS" if total == 0 else "FAIL", "violations": total,
-                        "columns": cols, "first_rows": rows[:20], "sql_sha256": sref["sha256"]})
+        results.append({"id": gid, "check": x.get("check"), "status": "PASS" if total == 0 and same else "FAIL", "violations": total,
+                        "columns": cols, "first_rows": rows[:20], "sql_sha256": sref["sha256"],
+                        "opened_snapshot": got or opened})
     rec = {"manifest": ref_of(root, G3S_MANIFEST), "results": results}
     data = (json.dumps(rec, indent=2, ensure_ascii=False, default=str) + "\n").encode()
     from gates.common import sha256_bytes, now_utc
@@ -1232,6 +1244,13 @@ def g5p(root, ledger=CLAIMS):
     comps = companion_checks(g, root, c, approval=None)
     status_word_checks(g, root, [pth for pth in dpaths if text(pth)] + comps)
     stale_nested_ref_checks(g, root, "finish")
+    # Repair round 1 (2026-11-22): bind the precheck to every report it reviewed, not only the ledger. Each deliverable and
+    # companion is recorded with its hash and listed as an input, so G0 refuses a packet whose report changed after G5P.
+    reviewed = [pth for pth in dict.fromkeys([p for p in dpaths if text(p)] + list(comps))]
+    g.extra["deliverables"] = [ref_of(root, pth) for pth in reviewed]
+    for pth in reviewed:
+        if safe_rel(root, pth):
+            g.use(pth)
     return g.result()
 
 

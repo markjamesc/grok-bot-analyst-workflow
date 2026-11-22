@@ -268,7 +268,8 @@ def precheck_checks(g, root, lab, inputs):
     """Known fix 3 (owner correction 2026-11-20): a file name is not a precheck. A Stage 5 review packet must carry, as an
     input, a G5P gate record written by the gate runner (its bytes equal a write-once copy under artifacts/gates/history/)
     whose result is PASS and whose `ledger` {path, sha256} is the exact claims ledger listed in the same packet, at the same
-    path and hash. Every input that G5P recorded must still be unchanged. `inputs` maps packet input paths to their hashes."""
+    path and hash. Every input that G5P recorded must still be unchanged, and so must every deliverable and companion it
+    recorded under `deliverables` (repair round 1). `inputs` maps packet input paths to their hashes."""
     recs = []
     for path, sha in inputs.items():
         if not path.lower().endswith(".json"):
@@ -293,6 +294,14 @@ def precheck_checks(g, root, lab, inputs):
             problems.append("not a gate-runner record (no matching artifacts/gates/history/G5P-*.json)")
         if not (text(lpath) and lsha and inputs.get(lpath) == lsha):
             problems.append(f"its ledger {lpath!r} at {lsha[:12] or None} is not an input of this packet at that hash")
+        dl = rec.get("deliverables")
+        if not (isinstance(dl, list) and dl and all(isinstance(d, dict) for d in dl)):
+            problems.append("it records no reviewed deliverables (repair round 1: G5P binds every report it reviewed)")
+        else:
+            changed = [d.get("path") for d in dl if not ref_current(root, d, need_nonempty=False)]
+            moved = [d.get("path") for d in dl if d.get("path") in inputs and inputs[d.get("path")] != str(d.get("sha256") or "").lower()]
+            if changed or moved:
+                problems.append(f"reports changed since G5P ran: {sorted(set(changed + moved))[:4]}")
         if stale:
             problems.append(f"inputs changed since G5P ran: {stale[:4]}")
         (why.append(f"{path}: " + "; ".join(problems)) if problems else good.append(path))

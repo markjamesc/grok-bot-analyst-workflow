@@ -6,7 +6,7 @@ Every gate run has an attempt id. gates.run writes the outcome of every recorded
 artifacts/gates/attempts/<attempt id>.json {attempt_id, gate, result PASS|FAIL|TOOL_ERROR, checked_at_utc, record_sha256}
 and also makes that attempt the current record artifacts/gates/<GATE>.json (TOOL_ERROR included).
 
-The coordinating role (the parent, or whichever role coordinates the case) requests a gate run with an attempt id it
+The Coordinator (docs/roles/coordinator.md) asks the Gate Runner for a gate run with an attempt id it
 chooses and advances only when this check exits 0 for that same attempt id:
 - the attempt file exists, is for this gate, and its result is PASS;
 - the current record for the gate is that attempt (no later attempt replaced it) and still matches the attempt's hash;
