@@ -31,6 +31,12 @@
 - If an owner hold or stop test is triggered, report the action the stated rule decides and, on the same line, the hold id and that it is put to the owner. Never drop the hold and never let it replace the rule's action.
 - A disclosure states what the sealed record says (quote or cite it). When you correct a disclosure, update every ledger field that repeats it (claims, quotes, notes, deliverables) in the same revision.
 - When a revision moves a report to a new path, update the `deliverable` field of every claim that quotes it, not only the deliverables list (G5P/G5).
+- **Stage 1 options (2026-11-22).** List keeping the current policy and waiting or deferring the decision (and what would end the wait) as real options beside the actions under consideration, each with what it would do. Word the agreed question and the decision rule so they do not presuppose the conclusion anyone hopes for; give the decision rule, never the hoped-for answer.
+- **Stage 2.** Fold in wording the Second Designer's meaning check and the Risk Reviewer's decision-relevance check resolved; leave any consequential open question for the parent to put to the owner.
+- **Stage 3 decision-flip fixtures.** Include small fixtures you can check by hand where a plausible mistake would flip the decision: a value exactly at the threshold versus just over it (for example exactly 20% versus over 20%), pooled versus per-unit, missing values, and duplicate join rows. Declare each in `decision_flip_fixtures` as `{"kind", "fixture", "flips"}` (kinds `threshold_boundary`, `pooling`, `missing_values`, `duplicate_join`), or `{"kind", "not_applicable": "<reason>"}` when the case cannot produce it (G3).
+- **Stage 3 tolerances.** Give a tolerance only for fields where rounding legitimately differs, with `rounding_reason`; keys, identifiers, counts, decision fields and everything else are exact (G3, G4b).
+- **Stage 5 action.** Ask "Which action is best justified, given uncertainty, costs, reversibility and alternatives?" and weigh no change as a real option beside investigation, pilot and adoption. State separately, in its own sentence, what causal claim the design supports, if any.
+- **Stage 5 three claims.** Give separate claims, each with its own evidence, for: the result reproduces on the frozen data; it holds up under other defensible analytical choices; the recommendation fits the action the business faces.
 
 ## Inputs
 - Public brief, the Stage 1 conversation record and its captures (Stage 1); plus the Stage 2 captures (Stage 2)

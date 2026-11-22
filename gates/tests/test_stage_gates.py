@@ -200,7 +200,7 @@ class StageGates(unittest.TestCase):
         r = self.copy()
         F.make_snapshot(os.path.join(r, "data/snapshot.sqlite"), dup_order=True)
         m = F.rj(r, "artifacts/stage3/source_gates/manifest.json")
-        m["database"]["snapshot"] = F.ref(r, "data/snapshot.sqlite")
+        m["database"]["snapshot"] = dict(F.ref(r, "data/snapshot.sqlite"), id=F.SNAPSHOT_ID)
         F.wj(r, "artifacts/stage3/source_gates/manifest.json", m)
         rec = self.assertFailsOn("G3S", r, "keys: zero violating rows")
         self.assertIn("completeness: zero violating rows", failed(rec))
@@ -407,7 +407,8 @@ class StageGates(unittest.TestCase):
         F.add_stage4_outputs(r, {"sql": F.CSV_SUMMARY.replace("15.5", "15.5000001")})
         self.assertFailsOn("G4b", r, "ra vs sql exact match")
         d = F.rj(r, "artifacts/stage3_grok_design.json")
-        d["reconciliation"]["outputs"][0]["tolerance"] = {"fields": ["total"], "absolute_tolerance": 1e-6, "relative_tolerance": 0}
+        d["reconciliation"]["outputs"][0]["tolerance"] = {"fields": ["total"], "absolute_tolerance": 1e-6, "relative_tolerance": 0,
+                                                       "rounding_reason": "R and SQL round the summed amount differently"}
         F.wj(r, "artifacts/stage3_grok_design.json", d)
         F.approve_design(r)
         F.review(r, "artifacts/stage3/reviews/second_designer_compare.json", "second_designer", d["review_subjects"])

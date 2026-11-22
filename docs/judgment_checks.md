@@ -3,7 +3,7 @@ name: judgment-checks
 description: Lead Designer, Second Designer and Risk Reviewer. Load before writing or reviewing any framing, design, claim, disclosure or review verdict. Author steps run after drafting and before replying; reviewer steps find where the author skipped them.
 ---
 
-# Judgment checks (v02: owner-approved 2026-11-16; severity rule loosened; first live check is case03)
+# Judgment checks (v03: owner-approved 2026-11-22; adds checkable tasks, first-answer rule, three separate claims and stage questions to v02 of 2026-11-16)
 
 ## Why this exists
 Most slips in our runs were not arithmetic. They were calls made from memory: a status word nobody re-opened, a definition that let one record be read two ways, a required item lost while text moved, a reviewer who rated a real defect as advisory. Re-reading your own draft rarely finds these. Opening the record does. So every check below asks you to open something and quote it, not to think harder.
@@ -42,6 +42,22 @@ R7. **Self-check block.** Missing, or any line without evidence, is a finding.
 
 **Accept rule.** Do not accept until you have done R2 and R3 yourself and listed what you opened. "No findings" must name the records checked.
 
+## Checkable tasks, first answers and stage questions (v03)
+**Checkable task.** Every review does at least one task someone else could repeat, and names it in the reply: recompute a named number from the sealed results, open a named source and quote the line, work a hidden or decision-flip fixture by hand, or name one specific unsupported inference. "Looks fine" or "no concerns" without a task is not a review.
+
+**First independent answer.** Seal your review (or design, or build) before you see a peer's conclusion. If you change it after seeing theirs, write a new version and keep the first; say what changed and why.
+
+**Three claims, judged separately.** (a) Does the result reproduce on the frozen data? (b) Does it hold up under other defensible analytical choices? (c) Does the recommendation fit the action the business faces? A pass on one is never evidence for another. The Risk Reviewer leads on (a); the Second Designer on (b) and (c).
+
+**Stage questions.**
+- Stage 1: are keeping the current policy and waiting or deferring real options? Does the question or decision rule presuppose the hoped-for conclusion?
+- Stage 2, Risk Reviewer: "Could we observe the finding this question measures even if the proposed action would do little good? What evidence would distinguish that situation?"
+- Stage 2, Second Designer: "Could two competent analysts read a key term differently and produce answers that would matter differently to this executive? Give one example where the meanings come apart."
+- Stage 3: does each decision-flip fixture (exact threshold, pooling, missing values, duplicate joins) really flip the decision if the mistake is made? Is every tolerance on a rounding field only?
+- Stage 5: is the recommended action the best justified one given uncertainty, costs, reversibility and alternatives, with no change weighed as a real option? Is any causal claim stated separately and supported by the design?
+
+Use the existing record (brief, captures, locked files) before asking the owner anything; let a clear case pass without extra questions.
+
 ## Self-check block template (author)
 ```
 JUDGMENT SELF-CHECK
@@ -70,4 +86,4 @@ Both reviewers come from the same model family, so they can share blind spots. T
 - Lead designer: author steps 1-7 on every framing, design, claim or disclosure reply; self-check block in the reply body only.
 - Second designer: reviewer steps R1-R7 plus the severity and accept rules on every review; author steps on any blind rebuild.
 - Risk reviewer: reviewer steps R1-R7 plus the severity and accept rules on every review.
-Stages, gates and send counts are unchanged.
+Every reviewer also does the checkable task, first-answer and three-claim steps above. Stages and send counts are unchanged; the gates that back these steps are listed in docs/stages.md ("Workflow changes").

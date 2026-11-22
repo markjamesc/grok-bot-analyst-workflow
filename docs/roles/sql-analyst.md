@@ -13,6 +13,7 @@
 - Report any rule in the packet you think is wrong; do not silently ignore it.
 - Write only to the output paths named in the packet.
 - At Stage 4 you write the extract from the frozen snapshot (SELECT-only). The parent never writes it.
+- Name the frozen snapshot you query by `id` and `sha256` in the G3S manifest (2026-11-22). Stage 4 runs on that same snapshot; if it has to change, say so, because G3S must run again on the new one before Stage 4.
 - If you must correct your own file before send, write the new version and log it in `artifacts/stage4/corrections.json` (new version path and hash, old path if different and old hash, your role, reason, time), and list the log as an output of your reply. Never ask for an unlock and re-freeze.
 
 ## Inputs

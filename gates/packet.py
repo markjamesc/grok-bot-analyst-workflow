@@ -38,7 +38,7 @@ import os
 import re
 
 from gates import guards
-from gates.common import Gate, PLACEHOLDER_RE, TIMESTAMP_RE, ref_current, safe_rel, sha256_file, text
+from gates.common import GATE_DIR, Gate, PLACEHOLDER_RE, TIMESTAMP_RE, load_json_strict, ref_current, safe_rel, sha256_file, text
 from gates.derivability import derivability_checks, raised_in_replies
 
 INDEX = "artifacts/packets/index.json"
@@ -222,9 +222,8 @@ def _check_packet(g, root, p, all_ids, forbidden_strings, forbidden_prefixes):
     g.add(f"{lab} split inputs complete", not incomplete, f"missing parts: {incomplete}" if incomplete else "ok")
     g.add(f"{lab} no forbidden inputs", not forbidden, f"forbidden: {forbidden}" if forbidden else f"prefixes {forbidden_prefixes}")
     if (f.get("STAGE") or [""])[0].strip().upper() == "5" and _norm_role((f.get("ROLE") or [""])[0]) in ("second-designer", "risk-reviewer"):
-        ips = [m.group("path") for m in (INPUT_RE.match(x) for x in in_lines) if m]
-        g.add(f"{lab} Stage 5 review carries a precheck log", any("precheck" in os.path.basename(x).lower() for x in ips),
-              "a Stage 5 review packet lists the latest G5P precheck log of the ledger it reviews as an input (case02 change 2)")
+        ips = {m.group("path"): m.group("sha").lower() for m in (INPUT_RE.match(x) for x in in_lines) if m}
+        precheck_checks(g, root, lab, ips)
     tph = guards.placeholder_refs(root, [m.group("path") for m in (INPUT_RE.match(x) for x in in_lines) if m])
     g.add(f"{lab} no template placeholder references", not tph,
           (guards.describe(tph) + " -- " + guards.TEMPLATE_HINT) if tph else "none")
@@ -250,6 +249,56 @@ def _check_packet(g, root, p, all_ids, forbidden_strings, forbidden_prefixes):
         g.add(f"{lab} names what it supersedes", text(sup) and sup in all_ids and sup != pid, "SUPERSEDES: <earlier packet id in the index>")
     if status in ("captured", "answered"):
         _check_reply(g, root, p, pid, lab, expected)
+
+
+G5P_HISTORY_PREFIX = "G5P-"
+
+
+def _runner_written(root, sha):
+    """True when these bytes are a write-once history copy the gate runner wrote (artifacts/gates/history/G5P-*.json)."""
+    hist = os.path.join(root, GATE_DIR, "history")
+    try:
+        names = [n for n in os.listdir(hist) if n.startswith(G5P_HISTORY_PREFIX) and n.endswith(".json")]
+    except OSError:
+        return False
+    return any(sha256_file(os.path.join(hist, n)) == sha for n in names)
+
+
+def precheck_checks(g, root, lab, inputs):
+    """Known fix 3 (owner correction 2026-11-20): a file name is not a precheck. A Stage 5 review packet must carry, as an
+    input, a G5P gate record written by the gate runner (its bytes equal a write-once copy under artifacts/gates/history/)
+    whose result is PASS and whose `ledger` {path, sha256} is the exact claims ledger listed in the same packet, at the same
+    path and hash. Every input that G5P recorded must still be unchanged. `inputs` maps packet input paths to their hashes."""
+    recs = []
+    for path, sha in inputs.items():
+        if not path.lower().endswith(".json"):
+            continue
+        full = safe_rel(root, path)
+        obj, err = load_json_strict(full) if full else (None, "unsafe")
+        if not err and isinstance(obj, dict) and obj.get("gate") == "G5P":
+            recs.append((path, sha, obj))
+    g.add(f"{lab} Stage 5 review carries a precheck log", bool(recs),
+          "a Stage 5 review packet lists the G5P gate record (artifacts/gates/history/G5P-*.json) of the ledger it reviews "
+          "as an input (case02 change 2); a file merely named 'precheck' does not count")
+    good, why = [], []
+    for path, sha, rec in recs:
+        led = rec.get("ledger") if isinstance(rec.get("ledger"), dict) else {}
+        lpath, lsha = led.get("path"), str(led.get("sha256") or "").lower()
+        stale = [i.get("path") for i in rec.get("inputs", []) if not (isinstance(i, dict) and ref_current(root, i, need_nonempty=False))] \
+            if isinstance(rec.get("inputs"), list) else ["(no inputs)"]
+        problems = []
+        if rec.get("result") != "PASS":
+            problems.append(f"result {rec.get('result')!r}")
+        if not _runner_written(root, sha):
+            problems.append("not a gate-runner record (no matching artifacts/gates/history/G5P-*.json)")
+        if not (text(lpath) and lsha and inputs.get(lpath) == lsha):
+            problems.append(f"its ledger {lpath!r} at {lsha[:12] or None} is not an input of this packet at that hash")
+        if stale:
+            problems.append(f"inputs changed since G5P ran: {stale[:4]}")
+        (why.append(f"{path}: " + "; ".join(problems)) if problems else good.append(path))
+    g.add(f"{lab} Stage 5 precheck PASS for the exact ledger", bool(good),
+          "G5P PASS recorded for the claims ledger in this packet (same path and sha256), inputs unchanged"
+          + (f"; {why[:3]}" if why and not good else ""))
 
 
 def _check_reply(g, root, p, pid, lab, expected):

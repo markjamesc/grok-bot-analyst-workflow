@@ -21,7 +21,7 @@ from gates import procedure as P
 from gates import guards, reconcile, repair, sql_select_only
 from gates import stakeholder as SH
 from gates import workflow_gate as WG
-from gates.common import (FAIL, PASS, Gate, ToolError, approval_ok, gate_record_current, ref_current, ref_of,
+from gates.common import (FAIL, GATE_DIR, PASS, PLACEHOLDER_RE, Gate, ToolError, approval_ok, gate_record_current, ref_current, ref_of,
                           review_checks, safe_rel, sha256_file, text, write_once)
 from gates.rsem import RError
 
@@ -231,6 +231,11 @@ def g3s(root, executor=None):
     g.add("Frozen snapshot pinned", db_ok, "database {engine: sqlite, snapshot: {path, sha256}} current, or engine external with an executor")
     if isinstance(db, dict) and isinstance(db.get("snapshot"), dict) and text(db["snapshot"].get("path")):
         g.use(db["snapshot"]["path"])
+    snap = snapshot_identity(db.get("snapshot") if isinstance(db, dict) else None)
+    g.add("Frozen snapshot identified", snap is not None,
+          "database.snapshot needs an id and the sha256 of the exact frozen snapshot queried (known fix 2); the G3S result "
+          "is bound to that snapshot and does not carry over to another one")
+    g.extra["snapshot"] = snap
     gates = m.get("gates")
     gates = gates if isinstance(gates, list) else []
     ids = [x.get("id") for x in gates if isinstance(x, dict)]
@@ -283,6 +288,38 @@ def g3s(root, executor=None):
         write_once(os.path.join(root, rel), data)
     g.extra["results_record"] = ref_of(root, rel)
     return g.result()
+
+
+def snapshot_identity(snap):
+    """{id, sha256, path?} of a frozen snapshot reference, or None when the id or hash is missing."""
+    if not isinstance(snap, dict) or not text(snap.get("id")) or not isinstance(snap.get("sha256"), str) \
+            or not re.fullmatch(r"[0-9a-f]{64}", snap["sha256"].lower()):
+        return None
+    out = {"id": snap["id"], "sha256": snap["sha256"].lower()}
+    if text(snap.get("path")):
+        out["path"] = snap["path"]
+    return out
+
+
+def snapshot_binding_checks(g, root, o):
+    """Known fix 2 (owner correction 2026-11-20): the Stage 4 outputs name the frozen snapshot they ran on
+    (`snapshot` {id, sha256, path?} in artifacts/stage4/outputs.json) and it must be the exact snapshot the current G3S
+    PASS checked. Switching from snapshot A to snapshot B needs a fresh G3S run on B; an old PASS on A never covers B."""
+    ok3s, det3s, ref3s = gate_record_current(root, "G3S")
+    if ref3s:
+        g.inputs.append(ref3s)
+    rec = _plain_at(root, f"{GATE_DIR}/G3S.json") if ok3s else None
+    checked = snapshot_identity((rec or {}).get("snapshot"))
+    ran = snapshot_identity(o.get("snapshot") if isinstance(o, dict) else None)
+    file_ok = ran is not None and ("path" not in ran or ref_current(root, ran))
+    if ran and "path" in ran:
+        g.use(ran["path"])
+    same = checked is not None and ran is not None and checked["id"] == ran["id"] and checked["sha256"] == ran["sha256"]
+    g.add("Stage 4 snapshot is the one G3S checked", ok3s and same and file_ok,
+          ("G3S: " + det3s + "; " if not ok3s else "")
+          + f"G3S checked {checked and (checked['id'], checked['sha256'][:12])}; Stage 4 ran on "
+          f"{ran and (ran['id'], ran['sha256'][:12])}" + ("" if file_ok else " (snapshot {id, sha256, path?} missing or not current)")
+          + ("" if same else " -- run G3S on this snapshot before Stage 4"))
 
 
 # ------------------------------------------------------------------------------------------------ G3K early key/count checks
@@ -366,6 +403,8 @@ def g3(root):
     design_lock_guards(g, [GROK_DESIGN, R_STEP["G3"][1]] + subj)
     lock_completeness_checks(g, d, outs)
     next_stage_entry_checks(g, root, d)
+    decision_flip_checks(g, d)
+    rounding_tolerance_checks(g, d)
     design_version_checks(g, _plain(R_STEP["G3"][1], g))
     stale_nested_ref_checks(g, root, "design")
     review_checks(g, "artifacts/stage3/reviews/second_designer_compare.json", "second_designer", subj, "Second Designer compare")
@@ -466,6 +505,63 @@ def _tolerance_shape_ok(tol):
             return False
     nm = tol.get("numeric_missingness")
     return nm is None or isinstance(nm, dict)
+
+
+DECISION_FLIP_KINDS = ("threshold_boundary", "pooling", "missing_values", "duplicate_join")
+
+
+def decision_flip_checks(g, d):
+    """Stage 3 change (2026-11-22): hand-checkable fixtures where a plausible mistake flips the decision. The Grok design
+    declares `decision_flip_fixtures` [{kind, fixture, flips}] covering every kind in DECISION_FLIP_KINDS
+    (a value exactly at the threshold versus just over it, pooled versus per-unit, missing values, duplicate join rows).
+    `fixture` names a declared fixture whose worked answer can be checked by hand and `flips` says which decision the
+    mistake would change; a kind that cannot arise in this case gives `not_applicable` with a reason instead.
+    These fixtures are the known answers G4a checks for R-A, R-B and SQL, even when the three agree with each other."""
+    fids = {f.get("id") for f in d.get("fixtures", []) if isinstance(f, dict)} if isinstance(d.get("fixtures"), list) else set()
+    df = d.get("decision_flip_fixtures")
+    got, bad = set(), []
+    for e in df if isinstance(df, list) else []:
+        e = e if isinstance(e, dict) else {}
+        k = e.get("kind")
+        if k not in DECISION_FLIP_KINDS:
+            bad.append(f"unknown kind {k!r}")
+            continue
+        if text(e.get("not_applicable")) and not PLACEHOLDER_RE.search(e["not_applicable"]):
+            got.add(k)
+        elif e.get("fixture") in fids and text(e.get("flips")):
+            got.add(k)
+        else:
+            bad.append(f"{k}: needs a declared fixture id and `flips`, or `not_applicable` with a reason")
+    missing = [k for k in DECISION_FLIP_KINDS if k not in got]
+    g.add("Decision-flip fixtures declared", isinstance(df, list) and not missing and not bad,
+          "decision_flip_fixtures: [{kind, fixture, flips} | {kind, not_applicable}] for each of " + ", ".join(DECISION_FLIP_KINDS)
+          + (f"; missing: {missing}" if missing else "") + (f"; bad: {bad[:4]}" if bad else ""))
+
+
+def rounding_tolerance_checks(g, d):
+    """Stage 4 change (2026-11-22), within the locked numeric boundary policy (control C39: no post hoc widening).
+    A tolerance is allowed only on fields where rounding legitimately differs: every tolerance with fields and a non-zero
+    width carries `rounding_reason` (why these fields round differently). Every other field, and every key, identifier,
+    count and decision field, is compared exactly."""
+    tols = []
+    for f in d.get("fixtures", []) if isinstance(d.get("fixtures"), list) else []:
+        if isinstance(f, dict):
+            tols.append((f"fixture {f.get('id')}", f.get("tolerance")))
+    rc = d.get("reconciliation")
+    for o in rc.get("outputs", []) if isinstance(rc, dict) and isinstance(rc.get("outputs"), list) else []:
+        if isinstance(o, dict):
+            tols.append((f"output {o.get('name')}", o.get("tolerance")))
+    bad = []
+    for lab, t in tols:
+        if not isinstance(t, dict) or not t.get("fields"):
+            continue
+        wide = any(isinstance(t.get(k), (int, float)) and not isinstance(t.get(k), bool) and t.get(k) > 0
+                   for k in ("absolute_tolerance", "relative_tolerance"))
+        if wide and not (text(t.get("rounding_reason")) and not PLACEHOLDER_RE.search(t["rounding_reason"])):
+            bad.append(lab)
+    g.add("Tolerances only on declared rounding fields", not bad,
+          "a non-zero tolerance names its fields and gives `rounding_reason`; all other fields match exactly"
+          + (f"; no rounding_reason: {bad}" if bad else ""))
 
 
 def next_stage_entry_checks(g, root, d):
@@ -617,6 +713,7 @@ def _design_and_outputs(g):
     o = g.load(OUTPUTS, "Stage 4 outputs record") or {}
     ok3, det3, _ = gate_record_current(g.root, "G3")
     g.add("G3 PASS and current (design locked)", ok3, det3)
+    snapshot_binding_checks(g, g.root, o)
     return d, o
 
 
@@ -1124,6 +1221,7 @@ def g5p(root, ledger=CLAIMS):
     through gates.run with a record; no R, review or G4d checks. A clean G5P means these G5 checks will pass on the placed ledger."""
     g = Gate("G5P", root)
     c = g.load(ledger, "Claims ledger") or {}
+    g.extra["ledger"] = ref_of(root, ledger)  # the exact ledger this precheck judged (known fix 3; read by G0)
     dl = c.get("deliverables")
     dl = dl if isinstance(dl, list) else []
     dpaths = [x.get("path") for x in dl if isinstance(x, dict)]

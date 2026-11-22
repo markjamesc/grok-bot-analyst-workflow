@@ -202,7 +202,8 @@ class Case03Units(unittest.TestCase):
         self.assertIn("number", _doc("docs/stages.md"))
         for rel in ("docs/handoff.md", "docs/roles/second-designer.md", "docs/roles/risk-reviewer.md", "docs/gates.md"):
             self.assertNotIn('"uncovered_claims": ["', _doc(rel), rel)
-        self.assertIn("owner finish approval -> R finish receipt -> RP complete finish -> G5 -> finalize -> G6", _doc("docs/stages.md"))
+        # 2026-11-22 (known fix 4): one wording of the finish order everywhere (see test_sunday_changes.FinishOrderDocs)
+        self.assertIn("owner approves the exact finish package -> R `complete finish` -> G5 -> R `finalize` -> G6", _doc("docs/stages.md"))
         self.assertIn("Stage 1 reviews", _doc("docs/stages.md"))
         self.assertIn("Stage 1", _doc("docs/roles/second-designer.md"))
         self.assertIn("python3 -m gates.close", _doc("docs/rules.md"))

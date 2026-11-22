@@ -194,6 +194,9 @@ def make_snapshot(path, dup_order=False):
     con.close()
 
 
+SNAPSHOT_ID = "snap-A"
+
+
 def add_stage3(root, sql_overrides=None):
     make_snapshot(os.path.join(root, "data/snapshot.sqlite"))
     gates = []
@@ -201,7 +204,7 @@ def add_stage3(root, sql_overrides=None):
         q = (sql_overrides or {}).get(name, q)
         gates.append({"id": name, "check": kind, "sql": wt(root, f"sql/g3s/{name}.sql", q + "\n")})
     wj(root, "artifacts/stage3/source_gates/manifest.json",
-       {"database": {"engine": "sqlite", "snapshot": ref(root, "data/snapshot.sqlite")}, "gates": gates})
+       {"database": {"engine": "sqlite", "snapshot": dict(ref(root, "data/snapshot.sqlite"), id=SNAPSHOT_ID)}, "gates": gates})
     wt(root, "data/orders.csv", CSV_ORDERS)
     wt(root, "fixtures/F1_input.csv", CSV_ORDERS)
     wt(root, "fixtures/F1_expected.csv", CSV_SUMMARY)
@@ -211,6 +214,11 @@ def add_stage3(root, sql_overrides=None):
               "early_checks": {"keys": [{"id": "orders_pk", "table": ref(root, "data/orders.csv"), "columns": ["id"]}],
                                "counts": [{"id": "orders_n", "table": ref(root, "data/orders.csv"), "expected_rows": 3}]},
               "decision_thresholds": [{"id": "TH1", "value": 10, "statement": "expand when a customer's total is above 10"}],
+              "decision_flip_fixtures": [
+                  {"kind": "threshold_boundary", "fixture": "F1", "flips": "a total of exactly 10 is not above TH1; >= would expand it"},
+                  {"kind": "pooling", "fixture": "F1", "flips": "pooling both customers puts the total above 10 for everyone"},
+                  {"kind": "missing_values", "not_applicable": "amount has no missing values in the frozen schema (G2F quality)"},
+                  {"kind": "duplicate_join", "fixture": "F1", "flips": "a duplicated customer row would double c2's total to 14"}],
               "review_subjects": ["artifacts/stage3_grok_design.json", "artifacts/stage3_locked_design.json"]}
     wj(root, "artifacts/stage3_grok_design.json", design)
     subj = design["review_subjects"]
@@ -228,7 +236,8 @@ def approve_design(root, text="Approved: design hash as listed"):
 
 
 def add_stage4_outputs(root, overrides=None):
-    o = {"outputs": {}, "fixtures": {}}
+    # The Stage 4 builders ran on the same frozen snapshot that G3S checked (known fix 2).
+    o = {"outputs": {}, "fixtures": {}, "snapshot": dict(ref(root, "data/snapshot.sqlite"), id=SNAPSHOT_ID)}
     for impl in ("ra", "rb", "sql"):
         body = (overrides or {}).get(impl, CSV_SUMMARY)
         o["outputs"][impl] = {"summary": wt(root, f"outputs/{impl}/summary.csv", body)}

@@ -37,6 +37,14 @@
 34. **Only the owner changes a rule.** A change to the brief's decision rule, thresholds or definitions (`rule_change`, or a `twist`) counts only when it is the owner's own captured words or is authorised by an owner capture. A number the Stakeholder states must be in the brief unless an owner capture authorises it, and the framing threshold must trace to the brief or such a change (G1, G2).
 35. **Stakeholder approval is never a lock.** Stage 1 and Stage 2 are locked only by the owner's own captured words (lock, approve, confirm, agree, go ahead, sign off or accept, not negated or conditional; confirming phrases such as "no changes" or "no further edits" are fine), bound to the exact hash of the decision document or framing, and later than every message it relies on.
 36. **Freeze counts restart with a workflow change to the stage inputs.** The live Stakeholder restarted every stage's clean-in-a-row count at zero from the first case run this way (docs/stages.md).
+37. **Advance only on the attempt you asked for** (2026-11-22). Every gate run has an attempt id and every outcome is recorded, TOOL_ERROR included; a failed retry replaces the earlier PASS. Move on only when `python3 -m gates.attempt <GATE> <root> <id>` exits 0 for the attempt you requested.
+38. **A source check covers one snapshot.** G3S records the frozen snapshot's id and hash; Stage 4 must run on that exact snapshot (G4a/G4b). A new snapshot needs a fresh G3S.
+39. **A precheck is a record, not a file name.** A Stage 5 review packet carries the runner-written G5P PASS record for the exact ledger in the packet (G0).
+40. **One finish order:** owner approves the exact finish package -> R `complete finish` -> G5 -> R `finalize` -> G6.
+41. **Real alternatives.** Stage 1 lists keeping the current policy and waiting or deferring as options, and the question does not presuppose the hoped-for answer. Stage 5 recommends the best justified action with no change as a real option and states any causal claim separately.
+42. **Decision-flip fixtures and known answers.** Stage 3 declares hand-checkable fixtures for the exact threshold, pooling, missing values and duplicate joins (G3); Stage 4 checks every implementation against them even when the implementations agree (G4a).
+43. **Tolerances only for rounding.** A tolerance is declared at the design lock for fields where rounding legitimately differs, with a reason; every other field matches exactly, and no tolerance is widened after results are seen (C39).
+44. **Reviews are checkable and first answers are kept.** Each review does a task someone could repeat; each role's first sealed answer is kept when it revises; reproduce, hold up and fits the action are judged as three separate claims; the parent keeps a light review-cost log (`artifacts/review_costs.jsonl`).
 
 ## Run cap (head-to-head test)
 

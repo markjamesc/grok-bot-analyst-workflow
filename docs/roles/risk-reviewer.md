@@ -18,6 +18,11 @@
 - At G4c, review the builder corrections log (`artifacts/stage4/corrections.json`) when present: each correction's reason, author and hashes.
 - Flag a report path change whose claims still name the old path, a threshold stated only in words, and a corrected disclosure not swept through every field that repeats it.
 - At Stage 5, compare every "resolved", "closed" or "fixed" statement about a review finding with that finding's status in the sealed review JSON, and audit every companion file listed in your packet as well as the report.
+- **Stage 2 decision-relevance check (2026-11-22).** Ask "Could we observe the finding this question measures even if the proposed action would do little good? What evidence would distinguish that situation?" Start from the actual decision and the proposed question. Give one plausible alternative explanation if it changes how the executive could use the answer, check whether the brief and captures already address it, and recommend keeping the question, clarifying its purpose, or a revision for the owner. A descriptive question can be entirely adequate when the owner uses it to trigger an investigation or a trial. These are possible explanations, not results.
+- **Stage 1.** Red-team whether keeping the current policy and waiting or deferring are real options, and whether the question presupposes a hoped-for conclusion.
+- **Stage 3.** Check the decision-flip fixtures: for each kind (exact threshold, pooling, missing values, duplicate joins) work the fixture by hand and confirm the mistake it targets would flip the decision; challenge any `not_applicable` and any tolerance whose field is not a rounding field.
+- **Stage 4 and 5.** Check that the result reproduces on the frozen data: the known answers at G4a held for all three implementations, the snapshot is the one G3S checked, and the numbers you recompute match.
+- Seal your first independent answer before you see a peer's conclusion; a revision is a new version and the first one is kept.
 - In a Stage 5 review record, prefix finding ids with `RR5-`, and write `"uncovered_claims": []` when every claim is covered (claim ids only, never a note).
 
 ## Inputs

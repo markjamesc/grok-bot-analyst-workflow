@@ -14,7 +14,7 @@
 - After any repair of a reviewed file (for example a Stage 2 framing repair), send the **current** version, whole, to every required reviewer and get new reviews before you run the gate (G2, G3 or G5). Reviews of the superseded version do not count, and the Python gates fail them.
 - At Stage 3, run the SQL source gates (G3S) the SQL Analyst writes; send their results to the Risk Reviewer. G3K remains a parent-owned Python gate.
 - After reconciliation (G4b), send the reconciled evidence to the Risk Reviewer for the post-reconciliation review (G4c) before the release gate (G4d).
-- At Stage 5, run G5 (claims) on the sealed claims ledger and deliverables, then present the sealed finish package (claims ledger and deliverables, with hashes) to the owner for approval of those exact hashes. Only then run the R Procedure Gate `finalize` and G6 (certificate).
+- At Stage 5, after both reviews, present the sealed finish package (claims ledger and deliverables, with hashes) to the owner for approval of those exact hashes. Then follow the finish order: owner approves the exact finish package -> R `complete finish` -> G5 -> R `finalize` -> G6. G5 reads the R finish receipt, which needs the owner's approval, so the approval always comes before G5.
 - Run the published Python gates. Do not substitute manual stand-ins for an implemented gate.
 - **Before accepting any stop on a missing input or mapping**, check the public schema, brief and bundle files yourself and record the result in `artifacts/derivability.json`, then run GD. If the item is derivable, send the child a new `-vN` packet with the derivation and continue; never close a stage as unresolved on it. Escalate to the owner only an item the public files do not settle.
 - List the public schema, brief and bundle files as inputs to every packet that may need them.
@@ -26,7 +26,10 @@
 - End every reply with the packet ID you answered and a short list of files you produced.
 - Report any rule in the packet you think is wrong; do not silently ignore it.
 - Rehearse a change on a scratch copy before recommending it to the owner.
-- Run G5P on every Stage 5 ledger before it goes to review and before placement; put the latest precheck log in every Stage 5 review packet (G0 checks it).
+- Run G5P on every Stage 5 ledger before it goes to review and before placement; put that G5P record (`artifacts/gates/history/G5P-*.json`) and the exact ledger it checked in every Stage 5 review packet. G0 fails a packet whose precheck is not a PASS for that ledger at that hash; a file named "precheck" does not count.
+- Run every gate with an attempt id you choose (`python3 -m gates.run <GATE> <root> --attempt=<id>`) and advance only when `python3 -m gates.attempt <GATE> <root> <id>` exits 0 for that attempt. A FAIL or TOOL_ERROR on a retry is the current result; never fall back to an earlier PASS.
+- Bind Stage 4 to the snapshot G3S checked: the G3S manifest names the frozen snapshot (`id`, `sha256`), and `artifacts/stage4/outputs.json` names the snapshot Stage 4 ran on. If the snapshot changes, run G3S again on the new one before Stage 4.
+- Give every reviewer a checkable task (recompute a named number, open a named source, run a hidden fixture, name an unsupported inference), keep each role's first sealed answer when it later revises, and append one line per review round to `artifacts/review_costs.jsonl` (stage, role, round, must-fix and advisory counts, false alarms, harmful revisions, elapsed minutes).
 - In a revision brief that changes a report path, require the author to update every claim's `deliverable` field.
 - Never write the extract or a builder's file yourself. A builder corrects its own file through the corrections log reviewed at G4c.
 - Put owner decisions plain-language first: what is decided, the options and what each does; technical detail after.

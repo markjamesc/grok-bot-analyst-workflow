@@ -2,6 +2,18 @@
 
 All notable changes to this design draft are recorded here. Dates are America/Chicago.
 
+## 0.6.0 — 2026-11-22
+
+Owner-approved workflow changes: the four known fixes and the stage refinements, inside the existing roles and gates (lessons L29–L32; standing rules 37–44). Not adopted: feasibility before the Stage 2 lock, a model-family switch, the 750-run benchmark.
+
+- **Attempt ids (new `gates/attempt.py`; `gates/run.py`).** Every gate run has an attempt id; every recorded outcome, TOOL_ERROR included, is written once to `artifacts/gates/attempts/<id>.json`, and a TOOL_ERROR becomes the current record. `python3 -m gates.attempt <GATE> <root> <id>` exits 0 only for a PASS of that attempt that is still current. A reused id is refused.
+- **Snapshot binding (G3S, G4a, G4b).** The G3S manifest names the snapshot by `id` and `sha256`, recorded in the G3S result; `artifacts/stage4/outputs.json` names the snapshot Stage 4 ran on, and G4a/G4b fail unless it is the one the current G3S PASS checked.
+- **Precheck by record (G0, G5P).** G5P records the exact `ledger`; a Stage 5 review packet must carry a runner-written G5P PASS for the ledger in the same packet, with unchanged inputs. A file named "precheck" no longer passes.
+- **Finish order** aligned in docs/stages.md (summary table), gates/README.md, docs/gates.md and the parent role: owner approves the exact finish package -> R `complete finish` -> G5 -> R `finalize` -> G6.
+- **G3:** `decision_flip_fixtures` for the exact threshold, pooling, missing values and duplicate joins; a non-zero tolerance needs `rounding_reason`.
+- **Process (role text and docs/judgment_checks.md v03):** Stage 1 keep-current and wait/defer options and no presupposed conclusion; the two Stage 2 review questions; Stage 4 known answers even when the implementations agree; Stage 5 best justified action with no change as an option and causal claims stated separately; checkable reviewer tasks; first independent answers kept; three separate claims; light review-cost log.
+- Tests: `gates/tests/test_sunday_changes.py` (35 tests); `test_case02_changes.py` precheck test updated (a file name alone now fails). Base fixtures carry the snapshot id, the Stage 4 snapshot and decision-flip declarations.
+
 ## 0.5.0 — 2026-11-16 (draft, not merged)
 
 Owner-approved process change: a live Stakeholder for Stages 1 and 2 (lesson L28). Stages 3, 4 and 5 are unchanged.

@@ -9,16 +9,16 @@ and on the gate fixtures.
 
 | ID | Status | Module | R checks inside (parity-tested port) | Tests |
 |---|---|---|---|---|
-| G0 Packet integrity | Implemented, tested | `packet.g0` | none (no R counterpart: the R gate has no packet format) | good path + 17 faults + supersession (3), template-input and derivability (2) tests + captured/promote (5) and "MISSING INPUT: none." (2) tests (`test_case03_changes.py`) |
+| G0 Packet integrity | Implemented, tested | `packet.g0` | none (no R counterpart: the R gate has no packet format) | good path + 17 faults + supersession (3), template-input and derivability (2) tests + captured/promote (5) and "MISSING INPUT: none." (2) tests (`test_case03_changes.py`); exact-ledger G5P precheck (7) tests (`test_sunday_changes.py`) |
 | GD Public-file derivability | Implemented, tested | `derivability.gd` (also run inside G0) | none (no R counterpart) | Case-C-style regression + 2 faults + nothing-raised path |
 | G1 Decision | Implemented, tested | `stage_gates.g1` | R `complete start` checks (validate_stage_receipt + operations ledger + closure) | good path + 5 faults |
 | G2 Question lock | Implemented, tested | `stage_gates.g2` | R `complete framing` checks | good path + 6 faults; Stage 2 conversation checks (`test_live_stakeholder.py`) |
 | Live Stakeholder conversation (inside G1 and G2) | Implemented, tested | `stakeholder` (checks and the capture tool) | none (no R equivalent) | good path + planted failures and tool refusals (`test_live_stakeholder.py`) |
 | G2F Feasibility | Implemented, tested | `stage_gates.g2f` | none (no R equivalent) | good path + 6 faults |
-| G3S SQL source-gate runner | Implemented, tested (sqlite engine only) | `stage_gates.g3s`, `sql_select_only` | none (no R equivalent) | good path + 6 faults + authorizer + TOOL_ERROR |
+| G3S SQL source-gate runner | Implemented, tested (sqlite engine only) | `stage_gates.g3s`, `sql_select_only` | none (no R equivalent) | good path + 6 faults + authorizer + TOOL_ERROR; snapshot identity and binding (7) tests (`test_sunday_changes.py`) |
 | G3K Early key/count checks | Implemented, tested | `stage_gates.g3k`, `repair` | none (no R equivalent) | good path + 4 faults + 3 repair-cap tests |
-| G3 Design lock | Implemented, tested | `stage_gates.g3` | R `complete design` checks (incl. m_design, m_ai) | good path + 7 faults + template-placeholder and descriptive-rate tests (4) + next-stage entry (3), version (3), threshold-field (2) and exposure (1) tests (`test_case03_changes.py`) |
-| G4a Fixtures | Implemented, tested | `stage_gates.g4a`, `reconcile` | ported R m_compare run on every pair | good path + 3 faults |
+| G3 Design lock | Implemented, tested | `stage_gates.g3` | R `complete design` checks (incl. m_design, m_ai) | good path + 7 faults + template-placeholder and descriptive-rate tests (4) + next-stage entry (3), version (3), threshold-field (2) and exposure (1) tests (`test_case03_changes.py`); decision-flip fixture (3) and rounding-tolerance (3) tests (`test_sunday_changes.py`) |
+| G4a Fixtures | Implemented, tested | `stage_gates.g4a`, `reconcile` | ported R m_compare run on every pair | good path + 3 faults; Stage 4 snapshot bound to G3S (2) tests (`test_sunday_changes.py`) |
 | G4b Reconciliation | Implemented, tested | `stage_gates.g4b`, `reconcile` | ported R m_compare run on every pair | good path + 8 tests |
 | G4c Post-reconciliation review | Implemented, tested | `stage_gates.g4c` | none (no R equivalent) | good path + 3 faults |
 | G4d Release | Implemented, tested | `stage_gates.g4d` | R `complete execution` checks + the whole ported R Workflow Gate | good path + 6 faults + R-report kept |
@@ -28,13 +28,15 @@ and on the gate fixtures.
 | Stage close check | Implemented, tested | `close.close_check` (`python3 -m gates.close`) | none (reads recorded verdicts) | certified-base PASS + G3 FAIL refused + changed input + missing record + CLI exit codes (`test_case03_changes.py`) |
 | GP Assembly regression | Implemented, tested | `gp_assembly`, `assembly` | none | 16 assembly + 6 GP tests |
 | Repair cap (3, then ESCALATE) | Implemented, tested | `repair` | — | in G3K/G4d tests |
+| Gate attempts (attempt ids, every outcome recorded) | Implemented, tested | `attempt`, `run` | none | 10 attempt tests + TOOL_ERROR-retry chain test (`test_sunday_changes.py`) |
 | R Workflow Gate port | Implemented, parity-tested | `workflow_gate.py` (+ `methodology.py`, `rsem.py`) | all | 27 whole-gate + 1,200+ function-level parity comparisons |
 | R Procedure Gate port (procedure-followed check) | Implemented, parity-tested except `successor` | `procedure.py` | all | 77 whole-command parity comparisons |
 
 ## Run
 
 ```
-python3 -m gates.run <GATE_ID> <project_root>        # exit 0 PASS, 1 FAIL, 2 TOOL_ERROR; writes artifacts/gates/<ID>.json
+python3 -m gates.run <GATE_ID> <project_root> [--attempt=<id>]  # exit 0 PASS, 1 FAIL, 2 TOOL_ERROR; writes artifacts/gates/<ID>.json
+python3 -m gates.attempt <GATE_ID> <project_root> <attempt id>  # exit 0 only if that attempt PASSed and is still the current record
 python3 -m gates.run G5P <project_root> --ledger=<claims json>   # precheck any ledger before review or placement
 python3 -m gates.close <CLOSING_GATE> <project_root>  # exit 0 only if the stage may be sealed closed (G1 G2 G2F G3 G4d G5 G6)
 python3 -m gates.packet promote <project_root> <packet id>   # captured -> answered, only on a G0 PASS
@@ -49,6 +51,11 @@ Each run writes `artifacts/gates/<ID>.json` (current verdict, with the path and 
 copy under `artifacts/gates/history/`. A later gate accepts a lower gate only if its record is PASS **and every recorded
 input still has the recorded hash** ("PASS by hash").
 
+**Attempts (known fix 1).** Every run has an attempt id (`--attempt=<id>`, or generated) and, when recorded, its outcome is
+written once to `artifacts/gates/attempts/<id>.json` {attempt_id, gate, result, checked_at_utc, record_sha256}, TOOL_ERROR
+included. A TOOL_ERROR also replaces the current record, so a failed retry never leaves an older PASS current. A reused
+attempt id is refused. The coordinating role advances only when `python3 -m gates.attempt` exits 0 for the attempt it asked for.
+
 ## Inputs (project-relative)
 
 | Gate | Files |
@@ -56,10 +63,10 @@ input still has the recorded hash** ("PASS by hash").
 | G1 | `artifacts/stage1_decision.json` (R Stage 1 receipt plus `actions_per_result` [>=2 {result, action}], `limits` [text]); `artifacts/workflow_pin.json` {base, commit, files[{path, sha256}]}; R `artifacts/operations/start.json`; Stage 1 receipt also `agreed_question` and `sources` [{brief_quote} or {statement, use} or {capture, quote, use}]; `artifacts/stage1/conversation.json` {stage, run_kind live/rehearsal, brief, persona, stakeholder_inputs, capture_dir, captures[{id, speaker stakeholder/owner/lead, timestamp, path, sha256}], opening, statements[{id, capture, kind, quote, brief_quote?, authorized_by?}]}; `captures/stage1_chat/<id>.txt` + `SHA256SUMS`; `artifacts/stage1_owner_lock.json` {stage, subject {path, sha256}, conversation, capture, quote} |
 | G2 | `artifacts/stage2_framing.json` (R Stage 2 receipt plus one `analytical_question`/`question_id`, `population`, `window` {start, end}, `metric`, `threshold`, `review_subjects`); `artifacts/stage2/reviews/second_designer_critique.json`, `risk_reviewer_framing_check.json`; framing `sources`; the Stage 1 record and `artifacts/stage2/conversation.json` with `captures/stage2_chat/`; `artifacts/stage2_owner_lock.json` |
 | G2F | `artifacts/stage2f_feasibility.json` {questions[{question_id, feasibility yes/partly/no, reason, structure[], quality[]}], owner_decision if partly/no}; `artifacts/stage2f/reviews/risk_reviewer_feasibility.json`; current G2 record |
-| G3S | `artifacts/stage3/source_gates/manifest.json` {database {engine: sqlite, snapshot {path, sha256}}, gates[{id, check, sql {path, sha256}}]}; each query returns violating rows (PASS = 0 rows); results written write-once under `artifacts/stage3/source_gates/results/` |
+| G3S | `artifacts/stage3/source_gates/manifest.json` {database {engine: sqlite, snapshot {id, path, sha256}}, gates[{id, check, sql {path, sha256}}]}; the record keeps `snapshot` {id, sha256, path}; each query returns violating rows (PASS = 0 rows); results written write-once under `artifacts/stage3/source_gates/results/` |
 | G3K | `artifacts/stage3_grok_design.json` `early_checks` {keys[{id, table, columns}], counts[{id, table, expected_rows}]}; `artifacts/repairs.json` |
-| G3 | R `artifacts/stage3_locked_design.json`; `artifacts/stage3_grok_design.json` {fixtures, reconciliation, early_checks, review_subjects}; reviews `artifacts/stage3/reviews/{second_designer_compare, risk_reviewer_red_team, risk_reviewer_source_gates}.json`; `artifacts/stage3_owner_approval.json` {design_sha256, grok_design_sha256, approval_text, approval_timestamp}; current G3S and G3K records |
-| G4a/G4b | `artifacts/stage4/outputs.json` {outputs {ra, rb, sql: {name: {path, sha256}}}, fixtures {ra, rb, sql: {fixture_id: {path, sha256}}}} |
+| G3 | R `artifacts/stage3_locked_design.json`; `artifacts/stage3_grok_design.json` {fixtures, reconciliation (tolerance {fields, absolute_tolerance, relative_tolerance, rounding_reason}), early_checks, decision_flip_fixtures[{kind threshold_boundary/pooling/missing_values/duplicate_join, fixture + flips, or not_applicable}], review_subjects}; reviews `artifacts/stage3/reviews/{second_designer_compare, risk_reviewer_red_team, risk_reviewer_source_gates}.json`; `artifacts/stage3_owner_approval.json` {design_sha256, grok_design_sha256, approval_text, approval_timestamp}; current G3S and G3K records |
+| G4a/G4b | `artifacts/stage4/outputs.json` {snapshot {id, sha256, path}, outputs {ra, rb, sql: {name: {path, sha256}}}, fixtures {ra, rb, sql: {fixture_id: {path, sha256}}}}; the current G3S record |
 | G4c | `artifacts/stage4/reviews/risk_reviewer_g4c.json` covering the current G4b record and every reconciled output |
 | G4d | every lower gate record; `artifacts/repairs.json`; R `artifacts/stage4_validation_status.json` and Stage 4 evidence (the ported Workflow Gate). If R `artifacts/procedure/run_state.json` records a Workflow Gate report, G4d does not overwrite it and requires it unchanged |
 | GD | `artifacts/derivability.json` {public_sources[{path, sha256}], items[{id, stage, raised_in, item, search_terms, derivable, derivation + derived_from + resolution `continued` (derivable) or not_derivable_reason + escalated_at + resolution `escalated_to_owner` + term_hits_reviewed[{path, why_not_derivable}] (not derivable)}]}; the `MISSING INPUT:` lines of sealed replies in the packet index. See `gates/derivability.py` |
@@ -82,7 +89,9 @@ only if every current subject is listed at the same path with the current hash; 
   no cycle) with `superseded_reason` and an ISO `superseded_at` keeps its sealed hash but is not content-checked or
   counted (reported in `superseded`). No input may be a template `*.example.json` or a JSON file holding placeholder
   references (all-zero or `NOT_SET` hashes), followed through referenced JSON files (`gates/guards.py`). Every
-  `MISSING INPUT:` line in a sealed reply must pass the GD derivability checks.
+  `MISSING INPUT:` line in a sealed reply must pass the GD derivability checks. A Stage 5 Second Designer or Risk Reviewer
+  packet must list a G5P record written by the runner (bytes equal to an `artifacts/gates/history/G5P-*.json` copy) whose
+  result is PASS, whose `ledger` {path, sha256} is an input of the same packet at that hash, and whose inputs are unchanged.
 - **GD:** a stop on a missing input or mapping counts only after a check of the public files: public sources current
   and not private or an answer key; a derivable item records its derivation and `derived_from` and continues; a
   non-derivable item is escalated to the owner with a reason and time, and explains each public file that mentions one
@@ -100,7 +109,11 @@ only if every current subject is listed at the same path with the current hash; 
 - **G4b:** exact full-field match between R-A, R-B and SQL (all three pairs). Every column, compared as the text R's
   `read.csv(colClasses = "character")` reads (no trimming), keyed by the design keys; row order is ignored. A numeric
   tolerance applies only to columns the locked design lists under `tolerance.fields`. The ported R `m_compare` runs on
-  every pair as well, so G4b is never looser than the R comparison. Mismatch count must be 0.
+  every pair as well, so G4b is never looser than the R comparison. Mismatch count must be 0. G3 accepts a non-zero
+  tolerance only with a `rounding_reason` (fields where rounding legitimately differs); every other field is exact.
+- **G4a/G4b snapshot binding:** `outputs.json` `snapshot` {id, sha256} must equal the snapshot recorded by the current G3S
+  PASS (and its file, when a path is given, must be current). Snapshot B after a G3S PASS on snapshot A fails until G3S
+  is run on B. G4a compares every implementation with the fixtures' worked answers even when they agree with each other.
 - **G3S:** SELECT-only by static lint (one statement, SELECT/WITH, no write/DDL/session keyword outside quotes and
   comments; conservative, so a bare identifier such as `comment` or `set` must be quoted) **and** by execution on a
   read-only, immutable sqlite connection with `query_only` and an authorizer that denies all but reads. Engines other
@@ -129,8 +142,9 @@ error messages differs (verdicts and check lists are identical).
 
 ## Production note
 
-Run order at the end of a run: R `complete execution` → G4d → G5 → owner approval of the exact finish package →
-R `complete finish` and `finalize` → G0 (final) → G6. G4d never overwrites a report the R Procedure Gate recorded.
+Run order at the end of a run: R `complete execution` → G4d → G5P → Stage 5 reviews → then the finish order
+owner approves the exact finish package -> R `complete finish` -> G5 -> R `finalize` -> G6
+(G0 is run again before G6). G4d never overwrites a report the R Procedure Gate recorded.
 PASS by hash is one level deep: a gate record stays current while its own recorded inputs are unchanged, so G6
 re-checks every lower record directly.
 
@@ -151,3 +165,16 @@ Grok runs must produce those files, or the owner must approve a Grok-specific ma
 - **G5P** = the same claim and content checks (`claim_checks`, `finish_content_checks`) on any ledger; used before each Stage 5
   review packet and before placement. **G0** fails a Stage 5 Second Designer or Risk Reviewer packet without a precheck log input.
 
+
+## 2026-11-22 changes (0.6.0)
+
+- **Attempt ids (`gates/attempt.py`, `gates/run.py`).** Every outcome is recorded per attempt, TOOL_ERROR included; a TOOL_ERROR
+  becomes the current record; `python3 -m gates.attempt` passes only for a PASS of the requested attempt that is still current.
+- **Snapshot binding (G3S, G4a, G4b).** G3S needs a snapshot `id` and records {id, sha256, path}; G4a/G4b fail when
+  `outputs.json` `snapshot` is not that exact snapshot, and they list the G3S record as an input.
+- **Precheck by record (G0, G5P).** G5P records the exact `ledger` it checked; G0 accepts only a runner-written G5P PASS for
+  the ledger in the same packet.
+- **Finish order** stated the same way here, in docs/stages.md, docs/gates.md and the parent role.
+- **G3:** `decision_flip_fixtures` (Stage 3) and rounding-only tolerances (Stage 4).
+- Tests: `gates/tests/test_sunday_changes.py`. The base fixtures now carry a snapshot id, the Stage 4 snapshot and the
+  decision-flip declarations, so every existing good path still passes.

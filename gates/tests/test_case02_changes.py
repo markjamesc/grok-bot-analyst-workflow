@@ -221,10 +221,21 @@ class Case02Changes(unittest.TestCase):
         self.assertIn("Packet CASE-5-01 Stage 5 review carries a precheck log", failed(rec))
 
     def test_g0_stage5_review_packet_with_precheck(self):
+        # 2026-11-22 (known fix 3): the precheck is the runner-written G5P record for this exact ledger, not a file name.
+        r = self.copy()
+        self.assertEqual(run_gate("G5P", r, ledger=SG.CLAIMS)["result"], "PASS")
+        cur = F.sha(os.path.join(r, "artifacts/gates/G5P.json"))
+        hist = [os.path.join("artifacts/gates/history", n) for n in os.listdir(os.path.join(r, "artifacts/gates/history"))
+                if n.startswith("G5P-") and F.sha(os.path.join(r, "artifacts/gates/history", n)) == cur]
+        rec = self._s5_packet(r, [SG.CLAIMS, "stage5-evidence.md", hist[0]])
+        self.assertNotIn("Packet CASE-5-01 Stage 5 review carries a precheck log", failed(rec))
+        self.assertNotIn("Packet CASE-5-01 Stage 5 precheck PASS for the exact ledger", failed(rec))
+
+    def test_g0_stage5_precheck_file_name_alone_no_longer_counts(self):
         r = self.copy()
         F.wt(r, "artifacts/stage5/precheck_CASE-5-01.txt", "G5P PASS\n")
         rec = self._s5_packet(r, [SG.CLAIMS, "stage5-evidence.md", "artifacts/stage5/precheck_CASE-5-01.txt"])
-        self.assertNotIn("Packet CASE-5-01 Stage 5 review carries a precheck log", failed(rec))
+        self.assertIn("Packet CASE-5-01 Stage 5 review carries a precheck log", failed(rec))
 
 
 if __name__ == "__main__":

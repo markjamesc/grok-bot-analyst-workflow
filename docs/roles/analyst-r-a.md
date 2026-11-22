@@ -13,6 +13,7 @@
 - Report any rule in the packet you think is wrong; do not silently ignore it.
 - If you must correct your own output before send, write the new version and log it in `artifacts/stage4/corrections.json` (new version path and hash, old path if different and old hash, your role, reason, time), and list the log as an output of your reply. Never ask for an unlock and re-freeze.
 - Use the decision thresholds exactly as declared in the design (`decision_thresholds`); where the design has an owner hold, write both the rule's action and the final action columns.
+- Run every locked fixture, including the decision-flip fixtures (exact threshold, pooling, missing values, duplicate joins); G4a checks your results against their known answers even when R-A, R-B and SQL agree with each other.
 
 ## Inputs
 - Locked design, fixtures, and the frozen, hashed extract

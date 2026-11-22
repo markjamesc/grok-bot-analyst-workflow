@@ -56,6 +56,20 @@ These are design requirements for this draft. Items 1, 8 and 9 have Python gate 
 9. **Early key and counting checks** (gate G3K, implemented and tested), with a repair cap of **3** on the same defect (implemented and tested). After that, escalate to the owner with the open problems, a recommendation, and a batched revision.
 10. **Explainer document** for the five stages: [docs/explainer.md](docs/explainer.md).
 
+## Workflow changes of 2026-11-22 (owner-approved)
+
+Inside the existing roles and gates; details in [docs/stages.md](docs/stages.md) ("Workflow changes") and standing rules 37–44.
+
+- **Four known fixes (gate code, tested):** attempt ids with every outcome recorded (TOOL_ERROR included) and advance only on a PASS of the requested attempt; G3S bound to the exact frozen snapshot, so Stage 4 on another snapshot needs a fresh check; G0 accepts only a runner-written G5P PASS for the exact claims ledger in a Stage 5 review packet; one finish order everywhere (owner approves the exact finish package -> R `complete finish` -> G5 -> R `finalize` -> G6).
+- **Stage 1:** keeping the current policy and waiting or deferring are real options; the question does not presuppose the hoped-for conclusion.
+- **Stage 2:** the Risk Reviewer asks whether the finding could appear even if the action would do little good; the Second Designer gives one concrete example where two readings of a key term come apart.
+- **Stage 3:** hand-checkable decision-flip fixtures (exact threshold, pooling, missing values, duplicate joins), checked at G3.
+- **Stage 4:** results checked against known answers even when R-A, R-B and SQL agree; tolerances only on declared rounding fields, exact elsewhere.
+- **Stage 5:** the best justified action, with no change as a real option, and any causal claim stated separately.
+- **Across stages:** checkable reviewer tasks; each role's first independent answer kept; reproduce, hold up and fits the action judged as three separate claims; a light review-cost log.
+
+Not adopted (kept as possible later experiments): moving the feasibility check before the Stage 2 lock, a second model family, and the 750-run benchmark.
+
 ## Standing rules
 
 - **Do not weaken gates.** Version 2 (this Grok Bot design) seeks an official lock under these gates. Version 1 of the head-to-head (one ChatGPT, no second model) is scored on accuracy only, outside the official lock. It does not earn a Design or Finish lock under these rules.
