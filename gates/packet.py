@@ -264,12 +264,27 @@ def _runner_written(root, sha):
     return any(sha256_file(os.path.join(hist, n)) == sha for n in names)
 
 
+def _same_package(cur, rec):
+    """Repair round 3: the current G5P record is a PASS for the same ledger and the same deliverables (path and hash) as
+    the attached record, so a rerun on unchanged bytes (for the second reviewer) does not invalidate the first packet."""
+    def key(r):
+        led = r.get("ledger") if isinstance(r, dict) and isinstance(r.get("ledger"), dict) else {}
+        dl = r.get("deliverables") if isinstance(r, dict) and isinstance(r.get("deliverables"), list) else []
+        return (led.get("path"), str(led.get("sha256") or "").lower(),
+                sorted((d.get("path"), str(d.get("sha256") or "").lower()) for d in dl if isinstance(d, dict)))
+    return (isinstance(cur, dict) and cur.get("gate") == "G5P" and cur.get("result") == "PASS"
+            and isinstance(rec, dict) and rec.get("result") == "PASS" and bool(key(cur)[0]) and key(cur) == key(rec)
+            and bool(key(cur)[2]))
+
+
 def precheck_checks(g, root, lab, inputs):
     """Known fix 3 (owner correction 2026-11-20): a file name is not a precheck. A Stage 5 review packet must carry, as an
     input, a G5P gate record written by the gate runner (its bytes equal a write-once copy under artifacts/gates/history/)
     whose result is PASS and whose `ledger` {path, sha256} is the exact claims ledger listed in the same packet, at the same
     path and hash. Every input that G5P recorded must still be unchanged, and so must every deliverable and companion it
     recorded under `deliverables` (repair round 1).
+    Repair round 3: a precheck also counts when the current G5P record is a PASS for the same ledger and reports (a rerun on
+    unchanged bytes), and G0 records artifacts/gates/G5P.json as an input, so a later G5P run makes this G0 record stale.
     Repair round 2: the precheck must be the current G5P record (a newer G5P run, PASS or FAIL, supersedes it), every
     recorded deliverable must be an input of the packet at its recorded hash, and every other packet input must be part of
     the prechecked package (its ledger, deliverables or recorded inputs, at the recorded hash), so the packet cannot point
@@ -297,8 +312,11 @@ def precheck_checks(g, root, lab, inputs):
         if not _runner_written(root, sha):
             problems.append("not a gate-runner record (no matching artifacts/gates/history/G5P-*.json)")
         cur_g5p = os.path.join(root, GATE_DIR, "G5P.json")
-        if not (os.path.isfile(cur_g5p) and sha256_file(cur_g5p) == sha):
-            problems.append("not the current G5P record (a later G5P run supersedes it; rerun G5P and attach the new record)")
+        if not (os.path.isfile(cur_g5p) and (sha256_file(cur_g5p) == sha or _same_package(load_json_strict(cur_g5p)[0], rec))):
+            problems.append("superseded: the current G5P record is not a PASS for this same ledger and these same reports "
+                            "(rerun G5P and attach the new record)")
+        if os.path.isfile(cur_g5p):
+            g.use(f"{GATE_DIR}/G5P.json")   # repair round 3: a later G5P run makes this G0 record stale
         if not (text(lpath) and lsha and inputs.get(lpath) == lsha):
             problems.append(f"its ledger {lpath!r} at {lsha[:12] or None} is not an input of this packet at that hash")
         dl = rec.get("deliverables")

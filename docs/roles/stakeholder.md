@@ -27,4 +27,4 @@
 - The public brief and the persona, nothing else
 
 ## Outputs
-- Chat messages only. The parent captures every message the stage relies on, exactly, with its timestamp (see docs/handoff.md, "Live Stakeholder chat").
+- Chat messages only. The Gate Runner captures every message the stage relies on, exactly, with its timestamp (see docs/handoff.md, "Live Stakeholder chat").

@@ -5,7 +5,7 @@
 **Active in.** All stages.
 
 ## Instructions
-- At Stage 1, pin the workflow that will govern the run, and check the Lead Designer's decision document at G1.
+- At Stage 1, pin the workflow that will govern the run; the Gate Runner checks the Lead Designer's decision document at G1.
 - At Stages 1 and 2, run the group chat with the Stakeholder and the owner: write the persona from the public brief (the Stakeholder reads only the brief and the persona), let the Stakeholder open, ask clarifying questions, and let the owner weigh in. Have the Gate Runner capture every Stakeholder and owner message you rely on with `python3 -m gates.stakeholder capture` (exact text, timestamp; never retype a message or type a hash), register the statements you cite, and record the owner's lock with `gates.stakeholder lock` only from his own captured words. Never count the Stakeholder's approval as a lock, never treat its preference as a brief fact, and never accept a rule, threshold or definition change from it without an owner capture.
 - Keep the Python gates versioned and pinned; the Gate Runner runs them and nobody edits a gate during a live run.
 - Name the output paths in every packet. Children write only to those paths.

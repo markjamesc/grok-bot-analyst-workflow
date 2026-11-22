@@ -2,6 +2,16 @@
 
 All notable changes to this design draft are recorded here. Dates are America/Chicago.
 
+## 0.6.3 — 2026-11-22 (repair round 3)
+
+Fixes for results an independent review reproduced on 0.6.2 (584ad98). Lessons L43–L46.
+
+- **G5P** hashes the ledger before parsing it.
+- **G0** records the current G5P record as an input (a later G5P run makes G0, and so G6, stale) and accepts an attached precheck when the current G5P record is a PASS for the same ledger and reports.
+- **G5** refuses an R finish completion recorded later than G5.
+- **Docs:** remaining G1, capture and sealing instructions assigned to the Gate Runner.
+- Tests: `gates/tests/test_sunday_fixes_r3.py`.
+
 ## 0.6.2 — 2026-11-22 (repair round 2)
 
 Fixes for false passes an independent review reproduced on 0.6.1 (9035ebd). Lessons L37–L42.

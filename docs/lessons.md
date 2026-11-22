@@ -63,3 +63,9 @@ Repair round 2 of the 2026-11-22 changes (independent review; no case content or
 - L40 | A recorded G6 attempt stayed acceptable after a certified report changed | G6 records the inputs of the whole chain | test_recorded_g6_attempt_is_stale_after_a_report_edit
 - L41 | The attempt check combined one record's hash with another record's inputs | one read | test_record_published_during_the_check_is_not_mixed_in
 - L42 | The finish order was documented but not enforced | G5 and G6 check it from recorded times | test_g5_requires_the_exact_owner_approval_first, test_g5_requires_r_finish_completion_after_the_approval, test_g6_refuses_g5_run_after_r_finalization
+
+Repair round 3 of the 2026-11-22 changes (independent review; no case content or answers):
+- L43 | G5P recorded the hash of a ledger written just after it parsed the checked one | hash before parsing | test_g5p_fails_when_the_ledger_is_replaced_right_after_parsing
+- L44 | A later G5P run left an earlier G0 record current, and a rerun on unchanged bytes blocked the first reviewer's packet | G0 records the current G5P record; an equivalent current PASS counts | test_later_g5p_run_makes_the_recorded_g0_attempt_stale, test_second_reviewer_precheck_keeps_the_first_packet_valid
+- L45 | G5 passed with an R finish completion recorded after G5 | completion must not be later than G5 | test_g5_refuses_r_finish_completion_later_than_g5
+- L46 | Four instructions still gave G1, captures or sealing to the wrong role | name the acting role | test_remaining_instructions_name_the_role_that_acts

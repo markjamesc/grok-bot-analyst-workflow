@@ -214,3 +214,13 @@ Grok runs must produce those files, or the owner must approve a Grok-specific ma
 - Not changed (design changes, see CHANGELOG 0.6.2): signed or out-of-band gate records; execution records that bind each
   Stage 4 output to the snapshot it was computed from; companions in the R certificate (R repo).
 - Tests: `gates/tests/test_sunday_fixes_r2.py`.
+
+## Repair round 3 (2026-11-22, after the independent review of 584ad98)
+
+- **G5P hashes the ledger before parsing it**, so the recorded ledger hash is the hash of the ledger it checked.
+- **G0 and later G5P runs:** G0 records `artifacts/gates/G5P.json` as an input, so a later G5P run makes the G0 record (and
+  therefore G6) stale until G0 runs again. An attached precheck still counts when the current G5P record is a PASS for the
+  same ledger and the same reports (a rerun on unchanged bytes for the second reviewer); a later FAIL still rejects it.
+- **G5 refuses an R finish completion recorded later than G5 itself** (`R finish step completed before G5`).
+- Docs: the G1 check, Stakeholder-chat captures and sealing of the Second Designer's design are the Gate Runner's.
+- Tests: `gates/tests/test_sunday_fixes_r3.py`.

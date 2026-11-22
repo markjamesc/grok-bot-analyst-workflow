@@ -33,7 +33,7 @@
 - At Stage 5, an inference review of each material claim
 
 ## Forbidden
-- Seeing or asking for the Lead Designer's draft or reasoning before writing and sealing your own Stage 3 design.
+- Seeing or asking for the Lead Designer's draft or reasoning before you have submitted your own Stage 3 design and the Gate Runner has captured and sealed it.
 - Adopting the lead's draft as your own without an independent design and a comparison.
 - Reviewing a partial file and calling it a full review.
 - Seeing or asking for the private answer key.

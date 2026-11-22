@@ -1007,8 +1007,11 @@ def finish_order_checks(g, root, c, ap, comps):
           "stage5_owner_approval.json claims_sha256 and deliverables equal the current claims ledger and files")
     # run_state is read, not recorded as a G5 input: R finalization updates it after G5 by design (G6 records it)
     done, appr = finish_completed_at(root), _ts(ap.get("approval_timestamp"))
+    now = datetime.datetime.now(datetime.timezone.utc)
     g.add("R finish step completed after the owner approval", done is not None and appr is not None and appr <= done,
           f"run_state completed_steps.finish.completed_at_utc {done} must exist and not precede approval_timestamp {appr}")
+    g.add("R finish step completed before G5", done is not None and done <= now,
+          f"run_state completed_steps.finish.completed_at_utc {done} must not be later than this G5 run ({now:%Y-%m-%dT%H:%M:%SZ})")
 
 
 def claim_checks(g, root, c, dpaths):
@@ -1273,14 +1276,16 @@ def g5p(root, ledger=CLAIMS):
     """G5P: the G5 claim and content checks on any claims ledger (e.g. a child's reply before placement). Writes nothing unless run
     through gates.run with a record; no R, review or G4d checks. A clean G5P means these G5 checks will pass on the placed ledger."""
     g = Gate("G5P", root)
+    ledger_start = ref_of(root, ledger)       # repair round 3: hashed before it is parsed, compared again at the end
     c = g.load(ledger, "Claims ledger") or {}
-    g.extra["ledger"] = ref_of(root, ledger)  # the exact ledger this precheck judged (known fix 3; read by G0)
+    g.extra["ledger"] = ledger_start          # the exact ledger this precheck judged (known fix 3; read by G0)
     dl = c.get("deliverables")
     dl = dl if isinstance(dl, list) else []
     dpaths = [x.get("path") for x in dl if isinstance(x, dict)]
     # Repair round 2: hash what will be reviewed before any check reads it, and require the same bytes at the end, so the
     # record cannot certify bytes that replaced the checked ones while G5P ran.
-    start = {pth: ref_of(root, pth)["sha256"] for pth in [ledger] + [p for p in dpaths if text(p)] + list(declared_companions(c, None))}
+    start = {pth: ref_of(root, pth)["sha256"] for pth in [p for p in dpaths if text(p)] + list(declared_companions(c, None))}
+    start[ledger] = ledger_start["sha256"]
     g.add("Deliverables declared and current", bool(dl) and all(ref_current(root, x) for x in dl) and len(set(dpaths)) == len(dpaths),
           "deliverables: [{path, sha256}] current, no duplicates")
     claim_checks(g, root, c, dpaths)
