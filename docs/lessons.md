@@ -69,3 +69,9 @@ Repair round 3 of the 2026-11-22 changes (independent review; no case content or
 - L44 | A later G5P run left an earlier G0 record current, and a rerun on unchanged bytes blocked the first reviewer's packet | G0 records the current G5P record; an equivalent current PASS counts | test_later_g5p_run_makes_the_recorded_g0_attempt_stale, test_second_reviewer_precheck_keeps_the_first_packet_valid
 - L45 | G5 passed with an R finish completion recorded after G5 | completion must not be later than G5 | test_g5_refuses_r_finish_completion_later_than_g5
 - L46 | Four instructions still gave G1, captures or sealing to the wrong role | name the acting role | test_remaining_instructions_name_the_role_that_acts
+
+Repair round 4 of the 2026-11-22 changes (independent review; no case content or answers):
+- L47 | G0 judged a G5P PASS and recorded the hash of a FAIL published right after | judge and record from one read | test_g0_does_not_record_a_g5p_fail_published_after_it_judged_the_pass
+- L48 | G5P parsed one ledger and recorded another's hash | Gate.load records the parsed bytes' hash | test_g5p_never_passes_a_ledger_it_did_not_parse
+- L49 | G6 judged an earlier PASS and recorded the hash of a FAIL published right after | gate_record_read | test_g6_does_not_record_a_g0_fail_published_after_it_judged_the_pass
+- L50 | The explainer still gave G1 and G3S to the parent | name the Gate Runner and Database Connector | test_explainer_names_the_gate_runner

@@ -224,3 +224,16 @@ Grok runs must produce those files, or the owner must approve a Grok-specific ma
 - **G5 refuses an R finish completion recorded later than G5 itself** (`R finish step completed before G5`).
 - Docs: the G1 check, Stakeholder-chat captures and sealing of the Second Designer's design are the Gate Runner's.
 - Tests: `gates/tests/test_sunday_fixes_r3.py`.
+
+## Repair round 4 (2026-11-22, after the independent review of e1f257a)
+
+- **One read per judgement.** `common.read_json_strict` returns the parsed object and the hash of exactly the bytes parsed.
+  `Gate.load` records that hash; `gate_record_read` gives the verdict, the inputs judged and the hash from one read.
+  G0 judges and records the current G5P record from one read; G6 does the same for every earlier gate record; G5P's
+  ledger hash is the hash of the ledger it parsed.
+- Not changed: report and companion text is still read for the content checks separately from the hash comparison at
+  the start and end of G5P. A file replaced only while it is read for those checks, then put back, is not detected.
+  Closing that means running gates on a frozen copy of the project, or only letting the gate runner write the project
+  while a gate runs (see the known limits in CHANGELOG 0.6.4 and README).
+- Docs: docs/explainer.md gives G1 and G3S to the Gate Runner, with SQL executed by the Database Connector.
+- Tests: `gates/tests/test_sunday_fixes_r4.py`.

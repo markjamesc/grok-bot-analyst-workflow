@@ -38,7 +38,7 @@ import os
 import re
 
 from gates import guards
-from gates.common import GATE_DIR, Gate, PLACEHOLDER_RE, TIMESTAMP_RE, load_json_strict, ref_current, safe_rel, sha256_file, text
+from gates.common import GATE_DIR, Gate, PLACEHOLDER_RE, TIMESTAMP_RE, load_json_strict, read_json_strict, ref_current, safe_rel, sha256_file, text
 from gates.derivability import derivability_checks, raised_in_replies
 
 INDEX = "artifacts/packets/index.json"
@@ -311,12 +311,15 @@ def precheck_checks(g, root, lab, inputs):
             problems.append(f"result {rec.get('result')!r}")
         if not _runner_written(root, sha):
             problems.append("not a gate-runner record (no matching artifacts/gates/history/G5P-*.json)")
-        cur_g5p = os.path.join(root, GATE_DIR, "G5P.json")
-        if not (os.path.isfile(cur_g5p) and (sha256_file(cur_g5p) == sha or _same_package(load_json_strict(cur_g5p)[0], rec))):
+        # repair round 4: one read of the current G5P record; it is judged and recorded from the same bytes
+        cur_obj, cur_err, cur_sha = read_json_strict(os.path.join(root, GATE_DIR, "G5P.json"))
+        if cur_err or not (cur_sha == sha or _same_package(cur_obj, rec)):
             problems.append("superseded: the current G5P record is not a PASS for this same ledger and these same reports "
                             "(rerun G5P and attach the new record)")
-        if os.path.isfile(cur_g5p):
-            g.use(f"{GATE_DIR}/G5P.json")   # repair round 3: a later G5P run makes this G0 record stale
+        if cur_sha:
+            dep = {"path": f"{GATE_DIR}/G5P.json", "sha256": cur_sha}   # repair round 3: a later G5P run makes G0 stale
+            if dep not in g.inputs:
+                g.inputs.append(dep)
         if not (text(lpath) and lsha and inputs.get(lpath) == lsha):
             problems.append(f"its ledger {lpath!r} at {lsha[:12] or None} is not an input of this packet at that hash")
         dl = rec.get("deliverables")

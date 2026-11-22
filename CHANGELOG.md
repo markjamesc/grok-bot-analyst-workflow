@@ -2,6 +2,19 @@
 
 All notable changes to this design draft are recorded here. Dates are America/Chicago.
 
+## 0.6.4 — 2026-11-22 (repair round 4)
+
+Fixes for false passes the third independent review reproduced on 0.6.3 (e1f257a). Lessons L47–L50.
+
+- **One read per judgement:** G0 (current G5P record), G6 (every earlier gate record) and G5P (the ledger) judge and record the hash of the same bytes (`read_json_strict`, `gate_record_read`; `Gate.load` records the parsed bytes' hash).
+- **Docs:** explainer gives G1 and G3S to the Gate Runner and the SQL execution to the Database Connector.
+- Tests: `gates/tests/test_sunday_fixes_r4.py`.
+- **Known limits (accepted limits of the frozen version, not open redesign):**
+  1. **Stage 4 execution records do not bind outputs to the snapshot actually used.** G3S checks the snapshot the connector actually opened, but an R or SQL output could be computed from another snapshot while `outputs.json` names the checked one. Closing this would need an execution record that links each output to the snapshot it was computed from.
+  2. **Gate records are not signed or writer-restricted.** Records are plain files under `artifacts/gates/`. Anyone who can write both a current record and its matching history copy can make a PASS that the gates accept. The design relies on only the Gate Runner writing there. Closing this would need signed records or storage that only the Gate Runner can write.
+  3. **The R final certificate omits companion files.** The R procedure gate is in the separate R repo, and its certificate lists only the finish deliverables. The Python G6 checks and records the companions' hashes.
+  Also noted, same class as limit 2 (no gate can see a file that is swapped and restored while it reads it): a report or companion swapped only while G5P reads it for the content checks, then restored, is not detected. The gates assume nothing but the Gate Runner writes the project while a gate runs.
+
 ## 0.6.3 — 2026-11-22 (repair round 3)
 
 Fixes for results an independent review reproduced on 0.6.2 (584ad98). Lessons L43–L46.
@@ -24,7 +37,7 @@ Fixes for false passes an independent review reproduced on 0.6.1 (9035ebd). Less
 - **Finish order enforced** in G5 and G6 from the recorded times; test fixtures approve before G5 and rerun R `finalize` after G5.
 - **Docs:** the G1 check, SQL execution and sealing of first answers are assigned to the Gate Runner and Database Connector everywhere.
 - Positive Stage 5 review-packet tests now attach every prechecked report (the reviewer covers the whole package).
-- Open (design changes, not made): records an actor with write access to `artifacts/gates/` could fabricate (needs signed or out-of-band records); Stage 4 outputs computed from another snapshot but declared as the checked one (needs execution records binding outputs to the snapshot used); companions in the R final certificate (R repo).
+- Known limits (accepted for the frozen version, not open redesign; listed in full under 0.6.4): records an actor with write access to `artifacts/gates/` could fabricate (needs signed or out-of-band records); Stage 4 outputs computed from another snapshot but declared as the checked one (needs execution records binding outputs to the snapshot used); companions in the R final certificate (R repo).
 - Tests: `gates/tests/test_sunday_fixes_r2.py`.
 
 ## 0.6.1 — 2026-11-22 (repair round 1)

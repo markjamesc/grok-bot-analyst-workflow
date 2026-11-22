@@ -59,6 +59,13 @@ def safe_rel(root, rel):
 
 def load_json_strict(path):
     """Parse JSON; reject duplicate keys, NaN/Infinity and a non-UTF-8 file. Returns (obj, error)."""
+    obj, err, _ = read_json_strict(path)
+    return obj, err
+
+
+def read_json_strict(path):
+    """One read of a JSON file: (obj, error, sha256 of exactly the bytes parsed). Repair round 4: a verdict and the hash it
+    records come from the same read, never from two reads of a file that may have been replaced in between."""
     def hook(pairs):
         keys = [k for k, _ in pairs]
         dup = sorted({k for k in keys if keys.count(k) > 1})
@@ -71,11 +78,15 @@ def load_json_strict(path):
     try:
         with open(path, "rb") as fh:
             raw = fh.read()
-        return json.loads(raw.decode("utf-8"), object_pairs_hook=hook, parse_constant=bad_const), None
     except FileNotFoundError:
-        return None, "missing"
+        return None, "missing", None
+    except OSError as e:
+        return None, f"unreadable: {e}", None
+    sha = hashlib.sha256(raw).hexdigest()
+    try:
+        return json.loads(raw.decode("utf-8"), object_pairs_hook=hook, parse_constant=bad_const), None, sha
     except Exception as e:  # noqa: BLE001 - any parse problem is a FAIL of "parses"
-        return None, f"does not parse: {e}"
+        return None, f"does not parse: {e}", sha
 
 
 def ref_current(root, ref, need_nonempty=True):
@@ -131,8 +142,11 @@ class Gate:
         if full is None:
             self.add(f"{label} parses", False, f"{rel}: unsafe path")
             return None
-        obj, err = load_json_strict(full)
-        self.use(rel)
+        obj, err, sha = read_json_strict(full)
+        r = {"path": rel, "sha256": sha}          # the hash of exactly the bytes parsed (repair round 4)
+        if r not in self.inputs:
+            self.inputs.append(r)
+        self.last_loaded = r
         self.add(f"{label} parses", err is None and isinstance(obj, dict), f"{rel}: {err or 'ok'}" if err else rel)
         return obj if err is None and isinstance(obj, dict) else None
 
@@ -184,20 +198,20 @@ def record_inputs_current(root, gate_id, rec):
 
 def gate_record_current(root, gate_id):
     """(ok, detail, ref): the recorded verdict is PASS and every input it was based on still has the recorded hash."""
+    ok, det, ref, _ = gate_record_read(root, gate_id)
+    return ok, det, ref
+
+
+def gate_record_read(root, gate_id):
+    """(ok, detail, ref, record) from ONE read of the current record (repair round 4): the verdict, the inputs judged and
+    the hash returned all come from the same bytes."""
     rel = f"{GATE_DIR}/{gate_id}.json"
     full = os.path.join(root, rel)
-    rec, err = load_json_strict(full)
-    if err:
-        return False, f"{rel} {err}", None
-    if rec.get("gate") != gate_id or rec.get("result") != PASS:
-        return False, f"{gate_id} recorded result is {rec.get('result')!r}", None
-    inputs = rec.get("inputs")
-    if not isinstance(inputs, list) or not inputs:
-        return False, f"{gate_id} record lists no inputs", None
-    stale = [i.get("path") for i in inputs if not (isinstance(i, dict) and ref_current(root, i, need_nonempty=False))]
-    if stale:
-        return False, f"{gate_id} inputs changed since the gate ran: {stale}", None
-    return True, f"{gate_id} PASS; {len(inputs)} inputs current", {"path": rel, "sha256": sha256_file(full)}
+    rec, err, sha = read_json_strict(full)
+    if err or not isinstance(rec, dict):
+        return False, f"{rel} {err or 'not an object'}", None, None
+    ok, det = record_inputs_current(root, gate_id, rec)
+    return ok, det, ({"path": rel, "sha256": sha} if ok else None), rec
 
 
 def approval_ok(rec):

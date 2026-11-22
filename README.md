@@ -86,6 +86,14 @@ Not adopted (kept as possible later experiments): moving the feasibility check b
 - **Live Stakeholder (Stages 1–2).** The request is a captured back-and-forth with a Stakeholder role and the owner. Captures are exact and write-once; the framing cites them with the brief; a preference is never a fact; only the owner changes a rule or locks a stage (G1, G2; standing rules 31–36). Freeze counts restarted at zero with the first case run this way.
 - **No template placeholders in evidence** (G0 at send, G3 at the design lock), and **replaced packets are marked superseded** in the packet index (G0).
 
+## Known limits
+
+These are accepted limits of the frozen version, not open redesign work.
+
+1. **Stage 4 execution records do not bind outputs to the snapshot actually used.** G3S checks the snapshot the connector actually opened, but an R or SQL output could be computed from another snapshot while `outputs.json` names the checked one. Closing this would need an execution record that links each output to the snapshot it was computed from.
+2. **Gate records are not signed or writer-restricted.** Records are plain files under `artifacts/gates/`. Anyone who can write both a current record and its matching history copy can make a PASS that the gates accept. The design relies on only the Gate Runner writing there. Closing this would need signed records or storage that only the Gate Runner can write.
+3. **The R final certificate omits companion files.** The R procedure gate is in the separate R repo, and its certificate lists only the finish deliverables. The Python G6 checks and records the companions' hashes.
+
 ## Run cap (head-to-head test)
 
 One attempt per version on Case B. A maximum of 3 repair rounds. Stop and report after about a day of work per side. If a side is blocked, wait and retry up to 3 times, then report.

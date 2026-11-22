@@ -21,7 +21,7 @@ from gates import procedure as P
 from gates import guards, reconcile, repair, sql_select_only
 from gates import stakeholder as SH
 from gates import workflow_gate as WG
-from gates.common import (FAIL, GATE_DIR, PASS, PLACEHOLDER_RE, Gate, ToolError, approval_ok, gate_record_current, ref_current, ref_of,
+from gates.common import (FAIL, GATE_DIR, PASS, PLACEHOLDER_RE, Gate, ToolError, approval_ok, gate_record_current, gate_record_read, ref_current, ref_of,
                           review_checks, safe_rel, sha256_file, text, write_once, TIMESTAMP_RE)
 from gates.rsem import RError
 
@@ -1276,8 +1276,9 @@ def g5p(root, ledger=CLAIMS):
     """G5P: the G5 claim and content checks on any claims ledger (e.g. a child's reply before placement). Writes nothing unless run
     through gates.run with a record; no R, review or G4d checks. A clean G5P means these G5 checks will pass on the placed ledger."""
     g = Gate("G5P", root)
-    ledger_start = ref_of(root, ledger)       # repair round 3: hashed before it is parsed, compared again at the end
+    # repair round 4: the ledger's hash is taken from the same read that is parsed (Gate.load), and compared again at the end
     c = g.load(ledger, "Claims ledger") or {}
+    ledger_start = dict(getattr(g, "last_loaded", None) or ref_of(root, ledger))
     g.extra["ledger"] = ledger_start          # the exact ledger this precheck judged (known fix 3; read by G0)
     dl = c.get("deliverables")
     dl = dl if isinstance(dl, list) else []
@@ -1327,12 +1328,12 @@ def g6(root):
     g = Gate("G6", root)
     recs, refs = {}, {}
     for gid in CHAIN:
-        ok, det, ref = gate_record_current(root, gid)
+        ok, det, ref, rec = gate_record_read(root, gid)   # repair round 4: verdict, hash and inputs from one read
         g.add(f"{gid} PASS and current", ok, det)
         if ref:
             g.inputs.append(ref)
             refs[gid] = ref
-            recs[gid] = _plain(ref["path"], g) or {}
+            recs[gid] = rec or {}
             # Repair round 2: a G6 record depends on everything the chain depended on, so an accepted G6 attempt is stale
             # as soon as any report, companion or other input of an earlier gate changes.
             for i in recs[gid].get("inputs", []) if isinstance(recs[gid].get("inputs"), list) else []:
