@@ -22,7 +22,7 @@ from gates import guards, reconcile, repair, sql_select_only
 from gates import stakeholder as SH
 from gates import workflow_gate as WG
 from gates.common import (FAIL, GATE_DIR, PASS, PLACEHOLDER_RE, Gate, ToolError, approval_ok, gate_record_current, ref_current, ref_of,
-                          review_checks, safe_rel, sha256_file, text, write_once)
+                          review_checks, safe_rel, sha256_file, text, write_once, TIMESTAMP_RE)
 from gates.rsem import RError
 
 R_STEP = {"G1": ("start", "artifacts/stage1_decision.json"), "G2": ("framing", "artifacts/stage2_framing.json"),
@@ -962,12 +962,53 @@ def g5(root):
     comps = companion_checks(g, root, c, approval=ap5)
     status_word_checks(g, root, [pth for pth in dpaths if text(pth)] + comps)
     stale_nested_ref_checks(g, root, "finish")
+    finish_order_checks(g, root, c, ap5 or {}, comps)
     subj = [CLAIMS] + [pth for pth in dpaths if text(pth)] + comps
     review_checks(g, S5_REVIEWS[0], "second_designer", subj, "Second Designer inference")
     review_checks(g, S5_REVIEWS[1], "risk_reviewer", subj, "Risk Reviewer numbers")
     stage5_review_shape_checks(g, root)
     repair.cap_checks(g)
     return g.result()
+
+
+def _ts(value):
+    """An ISO 8601 timestamp with Z or a UTC offset as an aware datetime, else None."""
+    if not isinstance(value, str) or not TIMESTAMP_RE.match(value):
+        return None
+    try:
+        return datetime.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def finish_completed_at(root):
+    """When the R procedure gate completed the finish step (run_state completed_steps.finish.completed_at_utc), or None."""
+    st = _plain_at(root, RUN_STATE) or {}
+    steps = st.get("completed_steps") if isinstance(st.get("completed_steps"), dict) else {}
+    fin = steps.get("finish") if isinstance(steps.get("finish"), dict) else {}
+    return _ts(fin.get("completed_at_utc"))
+
+
+def exact_approval_ok(root, c, ap, comps=()):
+    """The owner's finish approval covers the exact current claims ledger, deliverables and companions."""
+    cdl = {d.get("path"): str(d.get("sha256")).lower() for d in (c or {}).get("deliverables", []) if isinstance(d, dict)}
+    adl = {d.get("path"): str(d.get("sha256")).lower() for d in ap.get("deliverables", []) if isinstance(d, dict)} \
+        if isinstance(ap.get("deliverables"), list) else {}
+    cur_claims = ref_of(root, CLAIMS)["sha256"]
+    return (approval_ok(ap) and cur_claims is not None and str(ap.get("claims_sha256", "")).lower() == cur_claims
+            and bool(adl) and adl == cdl and all(ref_current(root, {"path": k, "sha256": v}) for k, v in adl.items())
+            and all(ref_current(root, ref_of(root, p)) for p in comps))
+
+
+def finish_order_checks(g, root, c, ap, comps):
+    """Repair round 2: G5 enforces the documented finish order up to itself: the owner approves the exact finish package,
+    then the R procedure gate completes the finish step, then G5 runs (G6 checks the rest)."""
+    g.add("Owner approved the exact finish package before G5", exact_approval_ok(root, c, ap, comps),
+          "stage5_owner_approval.json claims_sha256 and deliverables equal the current claims ledger and files")
+    # run_state is read, not recorded as a G5 input: R finalization updates it after G5 by design (G6 records it)
+    done, appr = finish_completed_at(root), _ts(ap.get("approval_timestamp"))
+    g.add("R finish step completed after the owner approval", done is not None and appr is not None and appr <= done,
+          f"run_state completed_steps.finish.completed_at_utc {done} must exist and not precede approval_timestamp {appr}")
 
 
 def claim_checks(g, root, c, dpaths):
@@ -1237,6 +1278,9 @@ def g5p(root, ledger=CLAIMS):
     dl = c.get("deliverables")
     dl = dl if isinstance(dl, list) else []
     dpaths = [x.get("path") for x in dl if isinstance(x, dict)]
+    # Repair round 2: hash what will be reviewed before any check reads it, and require the same bytes at the end, so the
+    # record cannot certify bytes that replaced the checked ones while G5P ran.
+    start = {pth: ref_of(root, pth)["sha256"] for pth in [ledger] + [p for p in dpaths if text(p)] + list(declared_companions(c, None))}
     g.add("Deliverables declared and current", bool(dl) and all(ref_current(root, x) for x in dl) and len(set(dpaths)) == len(dpaths),
           "deliverables: [{path, sha256}] current, no duplicates")
     claim_checks(g, root, c, dpaths)
@@ -1248,6 +1292,10 @@ def g5p(root, ledger=CLAIMS):
     # companion is recorded with its hash and listed as an input, so G0 refuses a packet whose report changed after G5P.
     reviewed = [pth for pth in dict.fromkeys([p for p in dpaths if text(p)] + list(comps))]
     g.extra["deliverables"] = [ref_of(root, pth) for pth in reviewed]
+    moved = [pth for pth in dict.fromkeys(list(start) + reviewed)
+             if start.get(pth) is None or ref_of(root, pth)["sha256"] != start.get(pth)]
+    g.add("Reviewed files unchanged while G5P ran", not moved,
+          "the ledger, deliverables and companions hashed before the checks equal the bytes recorded" + (f"; changed: {moved[:4]}" if moved else ""))
     for pth in reviewed:
         if safe_rel(root, pth):
             g.use(pth)
@@ -1280,6 +1328,11 @@ def g6(root):
             g.inputs.append(ref)
             refs[gid] = ref
             recs[gid] = _plain(ref["path"], g) or {}
+            # Repair round 2: a G6 record depends on everything the chain depended on, so an accepted G6 attempt is stale
+            # as soon as any report, companion or other input of an earlier gate changes.
+            for i in recs[gid].get("inputs", []) if isinstance(recs[gid].get("inputs"), list) else []:
+                if isinstance(i, dict) and text(i.get("path")) and i not in g.inputs:
+                    g.inputs.append({"path": i["path"], "sha256": i.get("sha256")})
     g0 = recs.get("G0", {})
     un = g0.get("unanswered") if isinstance(g0.get("unanswered"), list) else None
     g.add("Every packet answered", "G0" in recs and un == [], f"unanswered packets: {un}" if un else "G0 lists none unanswered")
@@ -1299,6 +1352,9 @@ def g6(root):
     cdl = {d.get("path"): str(d.get("sha256")).lower() for d in (c or {}).get("deliverables", []) if isinstance(d, dict)}
     adl = {d.get("path"): str(d.get("sha256")).lower() for d in ap.get("deliverables", []) if isinstance(d, dict)} \
         if isinstance(ap.get("deliverables"), list) else {}
+    comps = companion_checks(g, root, c or {}, approval=ap)
+    for pth in comps:
+        g.use(pth)
     cur_claims = ref_of(root, CLAIMS)["sha256"]
     g.add("Owner approved the exact finish package", approval_ok(ap) and cur_claims is not None
           and str(ap.get("claims_sha256", "")).lower() == cur_claims and bool(adl) and adl == cdl
@@ -1308,6 +1364,14 @@ def g6(root):
     cert = g.load(R_CERT, "R final certificate") or {}
     g.add("R certificate PASS", cert.get("result") == PASS and cert.get("certified") is True
           and cert.get("certificate") == "five_stage_procedure_certificate", "R `finalize` must have certified the run")
+    # Repair round 2: the documented finish order, from the recorded times: owner approval of the exact package, then R
+    # finish completion, then G5, then R finalization (the certificate), then this G6.
+    seq = [("owner approval", _ts(ap.get("approval_timestamp"))), ("R finish completion", finish_completed_at(root)),
+           ("G5", _ts(recs.get("G5", {}).get("checked_at_utc"))), ("R finalization", _ts(cert.get("certified_at_utc")))]
+    g.use(RUN_STATE)
+    bad = [f"{a} {ta} after {b} {tb}" for (a, ta), (b, tb) in zip(seq, seq[1:]) if ta is None or tb is None or ta > tb]
+    g.add("Finish steps in the documented order", not bad,
+          "owner approval <= R finish completion <= G5 <= R finalization (recorded times)" + (f"; {bad[:3]}" if bad else ""))
     cs = cert.get("completed_steps") if isinstance(cert.get("completed_steps"), list) else []
     got = [s.get("id") for s in cs if isinstance(s, dict)]
     stale = [s.get("id") for s in cs if not (isinstance(s, dict) and ref_current(root, {"path": s.get("artifact_path"), "sha256": s.get("artifact_sha256")}))]

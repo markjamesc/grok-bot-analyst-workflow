@@ -9,8 +9,12 @@ Other engines need an executor passed in by the caller; without one the gate is 
 """
 from __future__ import annotations
 
+import os
 import re
+import shutil
 import sqlite3
+import tempfile
+import urllib.parse
 
 FORBIDDEN = ["INSERT", "UPDATE", "DELETE", "MERGE", "UPSERT", "REPLACE", "CREATE", "DROP", "ALTER", "TRUNCATE", "GRANT",
              "REVOKE", "ATTACH", "DETACH", "PRAGMA", "VACUUM", "REINDEX", "ANALYZE", "COPY", "CALL", "EXEC", "EXECUTE",
@@ -85,17 +89,29 @@ def _authorizer(action, *_):
 def run_sqlite_identified(db_path, sql, snapshot_id, max_rows=1000):
     """The built-in sqlite database connector: run one SELECT on the read-only snapshot file and also return the identity
     {id, sha256} of the file it actually opened (hashed before opening and after closing; a file that changed while it
-    was open has no single identity, so its hash is reported as None)."""
+    was open has no single identity, so its hash is reported as None).
+    Repair round 2: the connector copies the snapshot into a private directory, hashes the copy and opens that same copy,
+    so the bytes it reports are the bytes it queried (a file swapped at the original path around the open, or a path
+    that a URI parser would read differently, cannot make it report one file and query another)."""
     from gates.common import sha256_file
-    before = sha256_file(db_path)
-    cols, rows, total = run_sqlite(db_path, sql, max_rows)
-    after = sha256_file(db_path)
+    tmp = tempfile.mkdtemp(prefix="g3s-snapshot-")
+    try:
+        os.chmod(tmp, 0o700)
+        copy = os.path.join(tmp, "snapshot.sqlite")
+        shutil.copyfile(db_path, copy)
+        os.chmod(copy, 0o400)
+        before = sha256_file(copy)
+        cols, rows, total = run_sqlite(copy, sql, max_rows)
+        after = sha256_file(copy)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
     return cols, rows, total, {"id": snapshot_id, "sha256": before if before == after else None}
 
 
 def run_sqlite(db_path, sql, max_rows=1000):
     """Execute one SELECT on a read-only snapshot. Returns (columns, rows, total_row_count)."""
-    uri = "file:" + db_path.replace("?", "%3f").replace("#", "%23") + "?mode=ro&immutable=1"
+    # Percent-encode the whole path (repair round 2): '%', '?' and '#' in a file name must not be decoded by the URI parser.
+    uri = "file:" + urllib.parse.quote(os.path.abspath(db_path), safe="/") + "?mode=ro&immutable=1"
     con = sqlite3.connect(uri, uri=True)
     try:
         con.execute("PRAGMA query_only = ON")

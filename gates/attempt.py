@@ -15,13 +15,14 @@ Exit 0 PASS (may advance), 1 FAIL (may not advance), 2 bad arguments.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
 import secrets
 import sys
 
-from gates.common import FAIL, GATE_DIR, PASS, gate_record_current, load_json_strict, now_utc, sha256_file, write_once
+from gates.common import FAIL, GATE_DIR, PASS, load_json_strict, now_utc, record_inputs_current, sha256_file, write_once
 
 ATTEMPT_DIR = f"{GATE_DIR}/attempts"
 ATTEMPT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{2,119}$")
@@ -74,14 +75,21 @@ def attempt_check(root, gate_id, attempt_id):
         return False, f"attempt {attempt_id} is for gate {at.get('gate')!r}, not {gate_id}"
     if at.get("result") != PASS:
         return False, f"attempt {attempt_id} ended {at.get('result')!r}; only a PASS for the requested attempt advances"
+    # Repair round 2: read the current record once and judge only those bytes (its attempt id, its hash and its inputs),
+    # so a record published while the check runs cannot mix one record's hash with another record's inputs.
     cur_rel = f"{GATE_DIR}/{gate_id}.json"
-    cur, err = load_json_strict(os.path.join(root, cur_rel))
-    if err or not isinstance(cur, dict) or cur.get("attempt_id") != attempt_id:
+    try:
+        with open(os.path.join(root, cur_rel), "rb") as fh:
+            data = fh.read()
+        cur = json.loads(data.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, ValueError) as e:
+        return False, f"current {gate_id} record unreadable: {e}"
+    if not isinstance(cur, dict) or cur.get("attempt_id") != attempt_id:
         got = cur.get("attempt_id") if isinstance(cur, dict) else None
         return False, f"current {gate_id} record is attempt {got!r}, not the requested {attempt_id}"
-    if sha256_file(os.path.join(root, cur_rel)) != at.get("record_sha256"):
+    if hashlib.sha256(data).hexdigest() != at.get("record_sha256"):
         return False, f"current {gate_id} record changed since attempt {attempt_id} was recorded"
-    ok, det, _ = gate_record_current(root, gate_id)
+    ok, det = record_inputs_current(root, gate_id, cur)
     return ok, f"attempt {attempt_id}: {det}"
 
 

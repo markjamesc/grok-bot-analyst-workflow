@@ -290,6 +290,15 @@ def build_r_certified_project(root):
         raise RuntimeError(p.stdout + p.stderr)
 
 
+def r_finalize(root):
+    """Run the R Procedure Gate `finalize` again (after G5, as the documented finish order requires). Returns the exit code."""
+    rs = rscript()
+    env = dict(os.environ, PATH=os.path.dirname(rs) + os.pathsep + os.environ.get("PATH", ""))
+    p = subprocess.run([rs, os.path.join(r_repo(), "procedure-gate", "procedure_gate.R"), "finalize", root],
+                       capture_output=True, text=True, env=env)
+    return p.returncode
+
+
 def claims_ledger(root, claims=None):
     dl = [ref(root, d) for d in DELIVERABLES]
     s4 = "outputs/ra/summary.csv"

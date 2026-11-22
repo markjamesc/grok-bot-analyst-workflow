@@ -61,11 +61,14 @@ class FinishGates(unittest.TestCase):
             if g == "G4c":
                 F.add_g4c_review(cls.base)
             if g == "G5":
+                # the documented finish order (repair round 2 enforces it): the owner approves the exact package before G5,
+                # and the R procedure gate finalizes after G5, before G6
                 F.add_stage5(cls.base)
+                F.approve_finish(cls.base)
             if g == "G0":
                 F.add_packets(cls.base)
             if g == "G6":
-                F.approve_finish(cls.base)
+                F.r_finalize(cls.base)
             cls.records[g] = run_gate(g, cls.base)
         cls.n = 0
 

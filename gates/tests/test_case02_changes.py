@@ -227,7 +227,7 @@ class Case02Changes(unittest.TestCase):
         cur = F.sha(os.path.join(r, "artifacts/gates/G5P.json"))
         hist = [os.path.join("artifacts/gates/history", n) for n in os.listdir(os.path.join(r, "artifacts/gates/history"))
                 if n.startswith("G5P-") and F.sha(os.path.join(r, "artifacts/gates/history", n)) == cur]
-        rec = self._s5_packet(r, [SG.CLAIMS, "stage5-evidence.md", hist[0]])
+        rec = self._s5_packet(r, [SG.CLAIMS, *F.DELIVERABLES, hist[0]])
         self.assertNotIn("Packet CASE-5-01 Stage 5 review carries a precheck log", failed(rec))
         self.assertNotIn("Packet CASE-5-01 Stage 5 precheck PASS for the exact ledger", failed(rec))
 

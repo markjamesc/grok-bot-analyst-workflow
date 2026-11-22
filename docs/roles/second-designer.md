@@ -19,7 +19,7 @@
 - **Stage 2 meaning check (2026-11-22).** Ask "Could two competent analysts read a key term differently and produce answers that would matter differently to this executive? Give one example where the meanings come apart." Using the locked decision, the brief and the captures, name the term, spell out the two readings in plain words and build one small hypothetical example that separates them. If the record settles it, cite the record and recommend exact wording. If both readings stay plausible and the choice matters, send one focused question through the parent. If the wording is clear or both readings serve the decision equally, let the framing stand.
 - **Stage 1.** Check the options include keeping the current policy and waiting or deferring, and that the question does not presuppose a hoped-for conclusion.
 - **Stage 5.** Judge separately whether the result holds up under other defensible analytical choices and whether the recommended action is the best justified one (no change included). Flag a causal claim the design does not support, or one mixed into a descriptive sentence.
-- Seal your first independent answer before you see a peer's conclusion; a revision is a new version and the first one is kept.
+- Submit your first independent answer (the Gate Runner captures and seals it) before you see a peer's conclusion; a revision is a new version and the first one is kept.
 - In a Stage 5 review record, prefix finding ids with `SD5-`, and write `"uncovered_claims": []` when every claim is covered (claim ids only, never a note). Compare every "resolved", "closed" or "fixed" statement with the sealed review it cites.
 
 ## Inputs

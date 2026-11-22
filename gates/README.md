@@ -195,3 +195,22 @@ Grok runs must produce those files, or the owner must approve a Grok-specific ma
 - **Operational roles.** Gate runs, captures, seals and closes belong to the Gate Runner, read-only SQL execution to the
   Database Connector, and stage advancement to the Coordinator (docs/roles/).
 - Tests: `gates/tests/test_sunday_fixes_r1.py`.
+
+## Repair round 2 (2026-11-22, after the independent review of 9035ebd)
+
+- **The sqlite connector queries the bytes it hashed.** It copies the snapshot to a private directory, hashes the copy and
+  opens that copy; the path is fully percent-encoded in the URI (a `%42` file name is no longer read as `B`).
+- **G0: the review packet carries exactly the prechecked package.** The precheck must be the current G5P record (a later G5P
+  run, PASS or FAIL, supersedes it); every deliverable G5P recorded must be an input at its recorded hash; every other input
+  must be part of the prechecked package (ledger, deliverables, G5P inputs) at the recorded hash.
+- **G5P records only bytes it checked:** the ledger, deliverables and companions are hashed before the checks and must be
+  unchanged at the end (`Reviewed files unchanged while G5P ran`).
+- **G6 depends on everything the chain depended on:** it lists the inputs of every chain record and the companions, so a
+  recorded G6 attempt is no longer accepted after a report or companion changes.
+- **Attempt check reads the current record once** and judges that record's attempt id, hash and inputs together.
+- **Finish order enforced:** G5 requires the exact-package owner approval and R finish completion no earlier than it; G6
+  requires owner approval <= R finish completion <= G5 <= R finalization (`Finish steps in the documented order`).
+  Test fixtures now approve before G5 and rerun R `finalize` after G5.
+- Not changed (design changes, see CHANGELOG 0.6.2): signed or out-of-band gate records; execution records that bind each
+  Stage 4 output to the snapshot it was computed from; companions in the R certificate (R repo).
+- Tests: `gates/tests/test_sunday_fixes_r2.py`.

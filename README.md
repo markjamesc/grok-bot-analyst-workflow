@@ -36,7 +36,7 @@ Role instructions: [docs/roles/](docs/roles/). Operational roles (repair round 1
 
 ## Stages
 
-1. **Start** — a live conversation in a group chat: the Stakeholder opens, the parent asks clarifying questions, the owner weighs in; every message relied on is captured exactly. The Lead Designer writes the Stage 1 decision document (agreed decision and question) from the brief and the captures; the owner locks it in his own words; the parent pins the workflow and checks it at G1.
+1. **Start** — a live conversation in a group chat: the Stakeholder opens, the parent asks clarifying questions, the owner weighs in; every message relied on is captured exactly. The Lead Designer writes the Stage 1 decision document (agreed decision and question) from the brief and the captures; the owner locks it in his own words; the parent pins the workflow and the Gate Runner runs G1.
 2. **Framing** — turn the decision into one precise question, talked through with the Stakeholder in the same group chat and locked by the owner in his own words.
 3. **Design** — lock how the question will be measured and tested. A **data-feasibility gate** sits between Stage 2 and Stage 3. In Stage 3 the SQL Analyst writes the SQL source gates; the Gate Runner runs them through the Database Connector.
 4. **Execution** — write and check the code (R-A, R-B, and SELECT-only SQL on the frozen hashed snapshot). The Gate Runner reconciles SQL against R (G4b); the Risk Reviewer then checks the reconciled evidence.

@@ -45,7 +45,7 @@ R7. **Self-check block.** Missing, or any line without evidence, is a finding.
 ## Checkable tasks, first answers and stage questions (v03)
 **Checkable task.** Every review does at least one task someone else could repeat, and names it in the reply: recompute a named number from the sealed results, open a named source and quote the line, work a hidden or decision-flip fixture by hand, or name one specific unsupported inference. "Looks fine" or "no concerns" without a task is not a review.
 
-**First independent answer.** Seal your review (or design, or build) before you see a peer's conclusion. If you change it after seeing theirs, write a new version and keep the first; say what changed and why.
+**First independent answer.** Submit your review (or design, or build), and have it captured and sealed by the Gate Runner, before you see a peer's conclusion. If you change it after seeing theirs, write a new version and keep the first; say what changed and why.
 
 **Three claims, judged separately.** (a) Does the result reproduce on the frozen data? (b) Does it hold up under other defensible analytical choices? (c) Does the recommendation fit the action the business faces? A pass on one is never evidence for another. The Risk Reviewer leads on (a); the Second Designer on (b) and (c).
 

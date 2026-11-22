@@ -2,6 +2,21 @@
 
 All notable changes to this design draft are recorded here. Dates are America/Chicago.
 
+## 0.6.2 — 2026-11-22 (repair round 2)
+
+Fixes for false passes an independent review reproduced on 0.6.1 (9035ebd). Lessons L37–L42.
+
+- **G3S / sqlite connector:** queries a private copy whose hash it reports; the URI path is fully percent-encoded.
+- **G0:** a Stage 5 review packet must carry the current G5P record and exactly the prechecked package (no unchecked ledger or report; no prechecked report omitted).
+- **G5P:** fails when a reviewed file changes while it runs.
+- **G6:** records the inputs of every chain gate and the companions, so an old G6 attempt goes stale when any of them changes.
+- **Attempt check:** one read of the current record.
+- **Finish order enforced** in G5 and G6 from the recorded times; test fixtures approve before G5 and rerun R `finalize` after G5.
+- **Docs:** the G1 check, SQL execution and sealing of first answers are assigned to the Gate Runner and Database Connector everywhere.
+- Positive Stage 5 review-packet tests now attach every prechecked report (the reviewer covers the whole package).
+- Open (design changes, not made): records an actor with write access to `artifacts/gates/` could fabricate (needs signed or out-of-band records); Stage 4 outputs computed from another snapshot but declared as the checked one (needs execution records binding outputs to the snapshot used); companions in the R final certificate (R repo).
+- Tests: `gates/tests/test_sunday_fixes_r2.py`.
+
 ## 0.6.1 — 2026-11-22 (repair round 1)
 
 Fixes for the false passes an outside review reproduced on 0.6.0 (3faeb07). Lessons L33–L36.

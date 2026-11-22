@@ -125,7 +125,7 @@ class RepairRound1(unittest.TestCase):
         r = self.copy()
         hist = self._precheck_hist(r)
         F.wt(r, "stage5-decision.md", F.DELIVERABLES["stage5-decision.md"] + "Added after the precheck.\n")
-        g0 = self._s5_packet(r, [SG.CLAIMS, "stage5-decision.md", hist])
+        g0 = self._s5_packet(r, [SG.CLAIMS, *F.DELIVERABLES, hist])
         self.assertEqual(g0["result"], "FAIL")
         self.assertIn(self.EXACT, failed(g0))
 
@@ -135,13 +135,13 @@ class RepairRound1(unittest.TestCase):
         rec = F.rj(r, hist)
         rec.pop("deliverables", None)
         F.wj(r, "artifacts/gates/history/G5P-hand-trimmed.json", rec)
-        g0 = self._s5_packet(r, [SG.CLAIMS, "stage5-decision.md", "artifacts/gates/history/G5P-hand-trimmed.json"])
+        g0 = self._s5_packet(r, [SG.CLAIMS, *F.DELIVERABLES, "artifacts/gates/history/G5P-hand-trimmed.json"])
         self.assertIn(self.EXACT, failed(g0))
 
     def test_g0_accepts_unchanged_reports(self):
         r = self.copy()
         hist = self._precheck_hist(r)
-        g0 = self._s5_packet(r, [SG.CLAIMS, "stage5-decision.md", hist])
+        g0 = self._s5_packet(r, [SG.CLAIMS, *F.DELIVERABLES, hist])
         self.assertEqual(g0["result"], "PASS", failed(g0))
 
     def test_g5_and_g6_refuse_a_report_changed_after_g5(self):

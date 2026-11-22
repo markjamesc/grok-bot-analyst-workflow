@@ -169,6 +169,19 @@ def record_gate(root, rec):
     return os.path.join(GATE_DIR, f"{rec['gate']}.json")
 
 
+def record_inputs_current(root, gate_id, rec):
+    """(ok, detail) for an already-read gate record: PASS for this gate and every input it lists still has the recorded hash."""
+    if not isinstance(rec, dict) or rec.get("gate") != gate_id or rec.get("result") != PASS:
+        return False, f"{gate_id} recorded result is {rec.get('result') if isinstance(rec, dict) else None!r}"
+    inputs = rec.get("inputs")
+    if not isinstance(inputs, list) or not inputs:
+        return False, f"{gate_id} record lists no inputs"
+    stale = [i.get("path") for i in inputs if not (isinstance(i, dict) and ref_current(root, i, need_nonempty=False))]
+    if stale:
+        return False, f"{gate_id} inputs changed since the gate ran: {stale}"
+    return True, f"{gate_id} PASS; {len(inputs)} inputs current"
+
+
 def gate_record_current(root, gate_id):
     """(ok, detail, ref): the recorded verdict is PASS and every input it was based on still has the recorded hash."""
     rel = f"{GATE_DIR}/{gate_id}.json"

@@ -84,7 +84,7 @@ python3 -m gates.stakeholder lock <root> --stage 1 --capture <owner capture id> 
 - After the Gate Runner runs G3S, send the source-gate code and results for review.
 
 ## Stage 4 packets for the SQL Analyst
-- Send the locked design and the frozen, hashed snapshot (not a live system) so the SQL Analyst can run independent SELECT-only queries. Do not include R-A or R-B work before freeze.
+- Send the locked design and the frozen, hashed snapshot (not a live system) so the SQL Analyst can write independent SELECT-only queries; the Database Connector executes them read-only. Do not include R-A or R-B work before freeze.
 
 ## Stage 4 packets for the Risk Reviewer
 - After the Gate Runner reconciles R-A, R-B, and SQL (G4b), send the reconciliation report and the reconciled evidence for the G4c review. Name the output paths in the packet.

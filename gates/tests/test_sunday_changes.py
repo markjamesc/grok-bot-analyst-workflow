@@ -295,7 +295,7 @@ class SundayChanges(unittest.TestCase):
         rec, hist = self._precheck(r)
         self.assertEqual(rec["result"], "PASS", failed(rec))
         self.assertEqual(rec["ledger"]["path"], SG.CLAIMS)
-        g0 = self._s5_packet(r, [SG.CLAIMS, "stage5-evidence.md", hist])
+        g0 = self._s5_packet(r, [SG.CLAIMS, *F.DELIVERABLES, hist])
         self.assertNotIn(self.PRESENT, failed(g0))
         self.assertNotIn(self.EXACT, failed(g0))
         self.assertEqual(g0["result"], "PASS", failed(g0))
@@ -320,7 +320,7 @@ class SundayChanges(unittest.TestCase):
         F.wj(r, "artifacts/stage5/claims_v02.json", c)
         rec, hist = self._precheck(r, "artifacts/stage5/claims_v02.json")
         self.assertEqual(rec["result"], "PASS", failed(rec))
-        g0 = self._s5_packet(r, [SG.CLAIMS, "stage5-evidence.md", hist])
+        g0 = self._s5_packet(r, [SG.CLAIMS, *F.DELIVERABLES, hist])
         self.assertNotIn(self.PRESENT, failed(g0))
         self.assertIn(self.EXACT, failed(g0))
 
@@ -330,7 +330,7 @@ class SundayChanges(unittest.TestCase):
         c = F.rj(r, SG.CLAIMS)
         c["note"] = "edited after the precheck"
         F.wj(r, SG.CLAIMS, c)
-        g0 = self._s5_packet(r, [SG.CLAIMS, "stage5-evidence.md", hist])
+        g0 = self._s5_packet(r, [SG.CLAIMS, *F.DELIVERABLES, hist])
         self.assertIn(self.EXACT, failed(g0))
 
     def test_failed_precheck_rejected(self):

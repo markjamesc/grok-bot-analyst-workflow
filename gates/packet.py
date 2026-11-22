@@ -269,7 +269,11 @@ def precheck_checks(g, root, lab, inputs):
     input, a G5P gate record written by the gate runner (its bytes equal a write-once copy under artifacts/gates/history/)
     whose result is PASS and whose `ledger` {path, sha256} is the exact claims ledger listed in the same packet, at the same
     path and hash. Every input that G5P recorded must still be unchanged, and so must every deliverable and companion it
-    recorded under `deliverables` (repair round 1). `inputs` maps packet input paths to their hashes."""
+    recorded under `deliverables` (repair round 1).
+    Repair round 2: the precheck must be the current G5P record (a newer G5P run, PASS or FAIL, supersedes it), every
+    recorded deliverable must be an input of the packet at its recorded hash, and every other packet input must be part of
+    the prechecked package (its ledger, deliverables or recorded inputs, at the recorded hash), so the packet cannot point
+    the reviewer at an unchecked ledger or report. `inputs` maps packet input paths to their hashes."""
     recs = []
     for path, sha in inputs.items():
         if not path.lower().endswith(".json"):
@@ -292,6 +296,9 @@ def precheck_checks(g, root, lab, inputs):
             problems.append(f"result {rec.get('result')!r}")
         if not _runner_written(root, sha):
             problems.append("not a gate-runner record (no matching artifacts/gates/history/G5P-*.json)")
+        cur_g5p = os.path.join(root, GATE_DIR, "G5P.json")
+        if not (os.path.isfile(cur_g5p) and sha256_file(cur_g5p) == sha):
+            problems.append("not the current G5P record (a later G5P run supersedes it; rerun G5P and attach the new record)")
         if not (text(lpath) and lsha and inputs.get(lpath) == lsha):
             problems.append(f"its ledger {lpath!r} at {lsha[:12] or None} is not an input of this packet at that hash")
         dl = rec.get("deliverables")
@@ -302,6 +309,16 @@ def precheck_checks(g, root, lab, inputs):
             moved = [d.get("path") for d in dl if d.get("path") in inputs and inputs[d.get("path")] != str(d.get("sha256") or "").lower()]
             if changed or moved:
                 problems.append(f"reports changed since G5P ran: {sorted(set(changed + moved))[:4]}")
+            absent = [d.get("path") for d in dl if d.get("path") not in inputs]
+            if absent:
+                problems.append(f"prechecked reports missing from the packet: {absent[:4]}")
+        package = {str(lpath): lsha}
+        for d in (dl if isinstance(dl, list) else []) + (rec.get("inputs") if isinstance(rec.get("inputs"), list) else []):
+            if isinstance(d, dict) and text(d.get("path")):
+                package[d["path"]] = str(d.get("sha256") or "").lower()
+        outside = [p for p, h in inputs.items() if p != path and package.get(p) != h]
+        if outside:
+            problems.append(f"inputs outside the prechecked package: {sorted(outside)[:4]}")
         if stale:
             problems.append(f"inputs changed since G5P ran: {stale[:4]}")
         (why.append(f"{path}: " + "; ".join(problems)) if problems else good.append(path))
